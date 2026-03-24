@@ -1,13 +1,14 @@
+require('dotenv').config({ path: '.env.local' });
 const mysql = require('mysql2/promise');
 
 async function setup() {
     try {
         const connection = await mysql.createConnection({
-            host: "mysql.us.stackcp.com",
-            port: 42099,
-            user: "formulariodatos-35303938f38b",
-            password: "kw8ucaxhzk",
-            database: "formulariodatos-35303938f38b"
+            host: process.env.MYSQL_HOST,
+            port: parseInt(process.env.MYSQL_PORT),
+            user: process.env.MYSQL_USER,
+            password: process.env.MYSQL_PASSWORD,
+            database: process.env.MYSQL_DATABASE
         });
 
         console.log("Conectado. Creando tablas...");
@@ -41,6 +42,13 @@ async function setup() {
                 estado VARCHAR(20) DEFAULT 'pendiente',
                 fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 fecha_envio TIMESTAMP NULL DEFAULT NULL
+            )`,
+            `CREATE TABLE IF NOT EXISTS media (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                filename VARCHAR(255) UNIQUE NOT NULL,
+                content LONGBLOB NOT NULL,
+                mimetype VARCHAR(100),
+                fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )`
         ];
 

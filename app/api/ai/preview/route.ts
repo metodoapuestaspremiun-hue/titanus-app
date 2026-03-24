@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import pool from '@/lib/mysql';
 
 export async function POST(request: Request) {
     try {
         const body = await request.json();
         const { provider, apiKey, prompt, variables } = body;
-        // Force refresh: 2025-12-31 16:45
-        // Fetch API key from DB if not provided (safety) but generally passed from FE or checking DB
+        
         let finalApiKey = apiKey;
 
         if (finalApiKey === "******** (Configurado)") {
@@ -14,7 +13,9 @@ export async function POST(request: Request) {
         }
 
         if (!finalApiKey && (provider === 'openai' || provider === 'gemini')) {
-            const { data } = await supabaseAdmin.from('configuracion').select('*').in('clave', ['openai_api_key', 'gemini_api_key']);
+            const [data]: any = await pool.query(
+                "SELECT clave, valor FROM configuracion WHERE clave IN ('openai_api_key', 'gemini_api_key')"
+            );
             if (data) {
                 const map: any = {};
                 data.forEach((r: any) => map[r.clave] = r.valor);
@@ -27,7 +28,6 @@ export async function POST(request: Request) {
             return NextResponse.json({ result: "⚠️ Falta la API Key del proveedor seleccionado. Guárdala primero." });
         }
 
-        // NOTA: Ya no pre-rellenamos el prompt aquí, para que la IA aprenda a usar {{Nombre}}
         let filledPrompt = prompt;
         const systemRule = "REGLA CRÍTICA: NO uses nombres propios reales en tu respuesta. USA SIEMPRE el placeholder {{Nombre}} para referirte al cliente. Ejemplo: '¡Hola {{Nombre}}!'";
         const finalPromptForAI = `SYSTEM RULE: ${systemRule}\n\nUSER PROMPT: ${filledPrompt}`;
@@ -35,8 +35,8 @@ export async function POST(request: Request) {
         let aiResponse = "";
 
         if (provider === 'openai') {
-            const { data: modelData } = await supabaseAdmin.from('configuracion').select('valor').eq('clave', 'openai_model').single();
-            const selectedModel = modelData?.valor || "gpt-3.5-turbo";
+            const [modelData]: any = await pool.query("SELECT valor FROM configuracion WHERE clave = 'openai_model'");
+            const selectedModel = modelData[0]?.valor || "gpt-3.5-turbo";
 
             const url = "https://api.openai.com/v1/chat/completions";
             const res = await fetch(url, {
@@ -58,8 +58,7 @@ export async function POST(request: Request) {
             aiResponse = json.choices[0].message.content;
         }
         else if (provider === 'gemini') {
-            // 1. Discover available models first
-            console.log("DEBUG: Discovering models for Gemini...");
+            // ... (Gemini model discovery logic remains same as it only uses fetch)
             const listUrl = `https://generativelanguage.googleapis.com/v1/models?key=${finalApiKey}`;
             let bestModel = "";
 
@@ -72,20 +71,15 @@ export async function POST(request: Request) {
                         .filter((m: any) => m.supportedGenerationMethods.includes('generateContent'))
                         .map((m: any) => m.name.replace('models/', ''));
 
-                    // Priority list: 2.0-flash, 1.5-flash, pro, others
                     const priority = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-flash-latest', 'gemini-pro', 'gemini-pro-latest'];
                     bestModel = priority.find(p => available.includes(p)) || available[0] || "gemini-pro";
-                    console.log(`DEBUG: Auto-selected model: ${bestModel}`);
                 } else {
-                    console.warn("DEBUG: Could not list models, falling back to gemini-pro");
                     bestModel = "gemini-pro";
                 }
             } catch (e) {
-                console.error("DEBUG: Discovery failed:", e);
                 bestModel = "gemini-pro";
             }
 
-            // 2. Call the best model
             const url = `https://generativelanguage.googleapis.com/v1/models/${bestModel}:generateContent?key=${finalApiKey}`;
             const res = await fetch(url, {
                 method: "POST",
@@ -113,7 +107,6 @@ export async function POST(request: Request) {
             userMessage = "⚠️ Límite de Google alcanzado (Cuota Excedida). \n\nEsto sucede porque la cuenta es nueva o ha enviado demasiadas solicitudes seguidas. \n\nPor favor, espera 1 minuto y vuelve a intentar. Si persiste, revisa que el Pago esté configurado en Google Cloud o usa una API Key diferente.";
         }
 
-        // Regresar 200 para que el frontend muestre el mensaje de error en la caja de texto
         return NextResponse.json({ result: userMessage });
     }
 }

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import pool from '@/lib/mysql';
 
 export async function DELETE(
     request: Request,
@@ -12,12 +12,7 @@ export async function DELETE(
             return NextResponse.json({ error: "ID required" }, { status: 400 });
         }
 
-        const { error } = await supabaseAdmin
-            .from('clientes')
-            .delete()
-            .eq('id', id);
-
-        if (error) throw error;
+        await pool.query('DELETE FROM clientes WHERE id = ?', [id]);
 
         return NextResponse.json({ success: true });
     } catch (error: any) {
@@ -36,16 +31,16 @@ export async function PUT(
         // Evitar que actualicen el ID
         delete body.id;
 
-        const { data, error } = await supabaseAdmin
-            .from('clientes')
-            .update(body)
-            .eq('id', id)
-            .select()
-            .single();
+        if (Object.keys(body).length === 0) {
+            return NextResponse.json({ error: "No data provided" }, { status: 400 });
+        }
 
-        if (error) throw error;
+        await pool.query('UPDATE clientes SET ? WHERE id = ?', [body, id]);
 
-        return NextResponse.json(data);
+        // Obtener el registro actualizado (opcional, para mantener paridad con Supabase .select().single())
+        const [rows]: any = await pool.query('SELECT * FROM clientes WHERE id = ?', [id]);
+        
+        return NextResponse.json(rows[0]);
     } catch (error: any) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }

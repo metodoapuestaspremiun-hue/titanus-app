@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import pool from '@/lib/mysql';
 
 export async function POST(request: Request) {
     try {
@@ -10,7 +10,7 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: "No se recibió ningún archivo" }, { status: 400 });
         }
 
-        // Validar tipo (opcional, pero recomendado)
+        // Validar tipo
         if (!file.type.startsWith('image/')) {
             return NextResponse.json({ error: "El archivo debe ser una imagen" }, { status: 400 });
         }
@@ -18,30 +18,26 @@ export async function POST(request: Request) {
         const buffer = Buffer.from(await file.arrayBuffer());
         const timestamp = Date.now();
         const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-        const fileName = `campaigns/${timestamp}_${safeName}`;
+        const fileName = `${timestamp}_${safeName}`;
+        
+        // Guardar en la base de datos MySQL (BLOB) per Vercel compatibility
+        await pool.query(
+            'INSERT INTO media (filename, content, mimetype) VALUES (?, ?, ?)',
+            [fileName, buffer, file.type]
+        );
 
-        const { data, error } = await supabaseAdmin
-            .storage
-            .from('bot')
-            .upload(fileName, buffer, {
-                contentType: file.type,
-                upsert: true
-            });
-
-        if (error) {
-            console.error("Supabase Storage Error:", error);
-            throw error;
-        }
-
-        // Obtener URL Pública
-        const { data: { publicUrl } } = supabaseAdmin
-            .storage
-            .from('bot')
-            .getPublicUrl(fileName);
+        // URL pública servida por nuestra propia API
+        const publicUrl = `/api/media/${fileName}`;
 
         return NextResponse.json({ url: publicUrl });
     } catch (error: any) {
-        console.error("Upload API Error:", error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        console.error("Media Serving Error:", error);
+        
+        let message = "Internal Server Error";
+        if (!process.env.MYSQL_HOST) {
+            message = "ERROR: Falta MYSQL_HOST en Vercel.";
+        }
+
+        return new Response(message, { status: 500 });
     }
 }

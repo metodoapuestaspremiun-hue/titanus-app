@@ -58,6 +58,7 @@ export default function LoginPage() {
                                     value={username}
                                     onChange={(e) => setUsername(e.target.value)}
                                     placeholder="Nombre de Usuario"
+                                    autoComplete="username"
                                     className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-spartan-yellow/50 transition-all font-bold"
                                 />
                             </div>
@@ -73,6 +74,7 @@ export default function LoginPage() {
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
                                     placeholder="••••••••••••"
+                                    autoComplete="current-password"
                                     className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-spartan-yellow/50 transition-all font-bold"
                                 />
                             </div>

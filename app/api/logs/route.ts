@@ -1,19 +1,27 @@
 import { NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import pool from '@/lib/mysql';
 
 export async function GET(request: Request) {
     try {
-        const { data, error } = await supabaseAdmin
-            .from('cola_mensajes')
-            .select('*')
-            .or('tipo.eq.log,nombre.eq.System Bot')
-            .order('fecha_creacion', { ascending: false })
-            .limit(100);
+        const [rows] = await pool.query(
+            `SELECT * FROM cola_mensajes 
+             WHERE tipo = 'log' OR nombre = 'System Bot' 
+             ORDER BY fecha_creacion DESC 
+             LIMIT 100`
+        );
 
-        if (error) throw error;
-
-        return NextResponse.json(data);
+        return NextResponse.json(rows);
     } catch (error: any) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        console.error("LOGS API ERROR:", error);
+        
+        // Error descriptivo para el usuario en producción
+        let message = error.message;
+        if (!process.env.MYSQL_HOST) {
+            message = "ERROR: Falta MYSQL_HOST en las variables de entorno de Vercel.";
+        } else if (message.includes("ETIMEDOUT") || message.includes("ECONNREFUSED")) {
+            message = "ERROR: No se pudo conectar a la base de datos. ¿Están bien las credenciales y el Firewall?";
+        }
+
+        return NextResponse.json({ error: message }, { status: 500 });
     }
 }
