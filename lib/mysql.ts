@@ -12,10 +12,7 @@ export default function getPool() {
             database: process.env.MYSQL_DATABASE,
             waitForConnections: true,
             connectionLimit: 10,
-            queueLimit: 0,
-            ssl: {
-                rejectUnauthorized: false
-            }
+            queueLimit: 0
         });
     }
     return pool;
