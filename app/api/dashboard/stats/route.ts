@@ -25,8 +25,9 @@ export async function GET() {
             vencimientos_hoy: vencimientosResult[0].count || 0,
             cumpleaños_hoy: cumpleResult[0].count || 0,
             mensajes_enviados: mensajesResult[0].count || 0,
-            bot_heartbeat: hbResult[0]?.valor ? `${hbResult[0].valor}-05:00` : null,
-            seconds_since_heartbeat: hbResult[0]?.seconds_diff ?? 999999
+            seconds_since_heartbeat: hbResult[0]?.seconds_diff ?? 999999,
+            last_heartbeat: hbResult[0]?.valor || null,
+            server_time: new Date().toISOString()
         };
 
         return NextResponse.json(stats);

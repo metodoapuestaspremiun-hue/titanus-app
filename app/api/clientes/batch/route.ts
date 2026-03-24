@@ -11,6 +11,19 @@ export async function POST(request: Request) {
             let inserted = 0;
             let errors = 0;
 
+            // Función para convertir fecha de Excel (número) a YYYY-MM-DD
+            const excelDateToJS = (serial: any) => {
+                if (!serial) return null;
+                if (typeof serial === 'string' && serial.includes('-')) return serial; // Ya es string YYYY-MM-DD
+                
+                try {
+                    const date = new Date(Math.round((serial - 25569) * 86400 * 1000));
+                    return date.toISOString().split('T')[0];
+                } catch (e) {
+                    return null;
+                }
+            };
+
             for (const client of body) {
                 try {
                     let { nombre, telefono, fecha_nacimiento, fecha_vencimiento, deuda, estado } = client;
@@ -19,7 +32,8 @@ export async function POST(request: Request) {
                         continue;
                     }
 
-                    // Limpiar teléfono
+                    const f_nac = excelDateToJS(fecha_nacimiento);
+                    const f_ven = excelDateToJS(fecha_vencimiento);
                     const cleanTel = String(telefono).replace(/[^0-9+]/g, '');
 
                     await pool.query(
@@ -34,8 +48,8 @@ export async function POST(request: Request) {
                         [
                             nombre, 
                             cleanTel, 
-                            fecha_nacimiento || null, 
-                            fecha_vencimiento || null, 
+                            f_nac, 
+                            f_ven, 
                             deuda || 0, 
                             estado || 'activo'
                         ]
