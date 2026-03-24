@@ -32,6 +32,14 @@ export async function GET() {
         return NextResponse.json(stats);
     } catch (error: any) {
         console.error("STATS API ERROR:", error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ 
+            total_clientes: 0,
+            vencimientos_hoy: 0,
+            cumpleaños_hoy: 0,
+            mensajes_enviados: 0,
+            bot_heartbeat: null,
+            seconds_since_heartbeat: 999999,
+            error: error.message 
+        }, { status: 500 });
     }
 }

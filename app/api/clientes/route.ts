@@ -11,7 +11,11 @@ export async function GET() {
         return NextResponse.json(rows);
     } catch (error: any) {
         console.error("CLIENTS GET ERROR:", error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        // We return an empty array and include the error in a custom header or property if needed
+        // but for the frontend to not crash, it MUST be an array.
+        const res: any = [];
+        res.error = error.message;
+        return NextResponse.json(res, { status: 500 });
     }
 }
 

@@ -14,6 +14,8 @@ export async function GET() {
         return NextResponse.json(rows);
     } catch (error: any) {
         console.error("LOGS API ERROR:", error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        const res: any = [];
+        res.error = error.message;
+        return NextResponse.json(res, { status: 500 });
     }
 }
