@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server';
-import pool from '@/lib/mysql';
+import getPool from '@/lib/mysql';
 
 export async function POST() {
     try {
-        // Borrar todos los mensajes de la cola (para reiniciar pruebas)
-        const [result]: any = await pool.query('DELETE FROM cola_mensajes WHERE id > 0');
-
-        return NextResponse.json({ success: true, count: result.affectedRows });
+        const pool = getPool();
+        await pool.query("DELETE FROM cola_mensajes WHERE estado = 'pendiente'");
+        return NextResponse.json({ success: true });
     } catch (error: any) {
-        return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+        console.error("QUEUE CLEAR ERROR:", error);
+        return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }

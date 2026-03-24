@@ -1,5 +1,4 @@
-import { NextResponse } from 'next/server';
-import pool from '@/lib/mysql';
+import getPool from '@/lib/mysql';
 
 export async function GET(
     request: Request,
@@ -12,7 +11,7 @@ export async function GET(
             return new Response("Filename required", { status: 400 });
         }
 
-        // Buscar el contenido en la tabla media
+        const pool = getPool();
         const [rows]: any = await pool.query(
             'SELECT content, mimetype FROM media WHERE filename = ?',
             [filename]
@@ -24,21 +23,14 @@ export async function GET(
 
         const { content, mimetype } = rows[0];
 
-        // Retornar el buffer con el tipo de contenido correcto
         return new Response(content, {
             headers: {
                 'Content-Type': mimetype || 'image/jpeg',
-                'Cache-Control': 'public, max-age=31536000, immutable', // Cache por un año
+                'Cache-Control': 'public, max-age=31536000, immutable',
             },
         });
     } catch (error: any) {
-        console.error("Media Serving Error:", error);
-        
-        let message = "Internal Server Error";
-        if (!process.env.MYSQL_HOST) {
-            message = "ERROR: Falta MYSQL_HOST en Vercel.";
-        }
-
-        return new Response(message, { status: 500 });
+        console.error("MEDIA API ERROR:", error);
+        return new Response(error.message, { status: 500 });
     }
 }

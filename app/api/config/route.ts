@@ -1,13 +1,16 @@
 import { NextResponse } from 'next/server';
-import pool from '@/lib/mysql';
+import getPool from '@/lib/mysql';
 
 export async function GET() {
     try {
+        if (!process.env.MYSQL_HOST) {
+            return NextResponse.json({ error: "Faltan variables de entorno en Vercel." }, { status: 500 });
+        }
+        const pool = getPool();
         const [rows]: any = await pool.query('SELECT * FROM configuracion');
 
         const configMap = rows.reduce((acc: any, row: any) => {
             let valor = row.valor;
-            // Full hardening: Don't even send masked keys to the frontend
             if (row.clave.includes('_api_key') && valor && valor.length > 5) {
                 valor = "******** (Configurado)";
             }
@@ -17,6 +20,7 @@ export async function GET() {
 
         return NextResponse.json(configMap);
     } catch (error: any) {
+        console.error("CONFIG GET ERROR:", error);
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
@@ -26,22 +30,18 @@ export async function POST(request: Request) {
         const body = await request.json();
         let { clave, valor } = body;
 
-        // Validation & Safety
         if (!clave || typeof clave !== 'string') return NextResponse.json({ error: "Clave inválida" }, { status: 400 });
-
-        // Sanitize clave
         clave = clave.replace(/[^a-zA-Z0-9_]/g, '');
 
-        // AI Safety: Limit prompt length to 2000 chars
         if (clave.startsWith('prompt_') && valor && valor.length > 2000) {
             valor = valor.substring(0, 2000);
         }
 
-        // IMPORTANT FIX: Don't save if it's the privacy placeholder
         if (valor === "******** (Configurado)") {
             return NextResponse.json({ success: true });
         }
 
+        const pool = getPool();
         await pool.query(
             'INSERT INTO configuracion (clave, valor) VALUES (?, ?) ON DUPLICATE KEY UPDATE valor = VALUES(valor)',
             [clave, valor]
@@ -49,6 +49,7 @@ export async function POST(request: Request) {
 
         return NextResponse.json({ success: true });
     } catch (error: any) {
+        console.error("CONFIG POST ERROR:", error);
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
