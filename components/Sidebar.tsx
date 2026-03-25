@@ -1,14 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
     Users,
-    MessageSquare,
+    LayoutDashboard,
     Settings,
     LogOut,
     Dumbbell,
-    Terminal
+    Terminal,
+    Upload
 } from "lucide-react";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
@@ -18,15 +19,23 @@ function cn(...inputs: ClassValue[]) {
 }
 
 const navItems = [
-    { name: "Cargar Clientes", href: "/cargar-clientes", icon: Users },
-    { name: "Clientes", href: "/clientes", icon: Users }, // Keeping this as it's useful
-    { name: "Conectar WhatsApp", href: "/configuracion", icon: MessageSquare },
-    { name: "Logs", href: "/logs", icon: Terminal },
+    { name: "Dashboard", href: "/", icon: LayoutDashboard },
+    { name: "Cargar Clientes", href: "/cargar-clientes", icon: Upload },
+    { name: "Clientes", href: "/clientes", icon: Users },
     { name: "Configuración", href: "/configuracion", icon: Settings },
+    { name: "Logs", href: "/logs", icon: Terminal },
 ];
 
 export default function Sidebar() {
     const pathname = usePathname();
+    const router = useRouter();
+
+    const handleLogout = () => {
+        // Borrar cookie de sesión
+        document.cookie = "titanus_session=; path=/; max-age=0; SameSite=Strict";
+        // Redirigir a login
+        router.push("/login");
+    };
 
     return (
         <div className="flex flex-col h-screen w-64 bg-spartan-black border-r border-white/10 text-white">
@@ -62,7 +71,10 @@ export default function Sidebar() {
             </nav>
 
             <div className="p-4 border-t border-white/10">
-                <button className="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-400 hover:bg-red-500/10 hover:text-red-500 w-full transition-all">
+                <button
+                    onClick={handleLogout}
+                    className="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-400 hover:bg-red-500/10 hover:text-red-500 w-full transition-all"
+                >
                     <LogOut className="h-5 w-5" />
                     Cerrar Sesión
                 </button>
