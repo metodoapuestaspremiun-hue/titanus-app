@@ -1,0 +1,132 @@
+[
+  {
+    "fecha": "2026-03-24",
+    "hora": "12:15",
+    "estado": "expirado (hora pasada)",
+    "mensaje": "Probando probando .= Camapaña",
+    "imagen": "/api/media/1774315221433_Logo.jpg",
+    "offset": 0,
+    "enviados_hoy": 0,
+    "day_tracking": "2026-03-24"
+  },
+  {
+    "fecha": "2026-03-24",
+    "hora": "12:40",
+    "estado": "completado (2 total)",
+    "mensaje": "Probando probando .= Camapaña",
+    "imagen": "/api/media/1774315221433_Logo.jpg",
+    "offset": 2,
+    "enviados_hoy": 2,
+    "day_tracking": "2026-03-24",
+    "last_run_minute": "2026-03-24 12:40"
+  },
+  {
+    "fecha": "2026-03-24",
+    "hora": "13:00",
+    "estado": "completado (2 total)",
+    "mensaje": "Probando probando .= Camapaña 2",
+    "imagen": "/api/media/1774374191706_Google_AI_Studio_2025-08-07T17_37_51.789Z.png",
+    "offset": 2,
+    "enviados_hoy": 2,
+    "day_tracking": "2026-03-24",
+    "last_run_minute": "2026-03-24 13:00"
+  },
+  {
+    "fecha": "2026-03-24",
+    "hora": "19:15",
+    "estado": "completado (2 total)",
+    "mensaje": "**¡Despierta tu Poder Interior, {{Nombre}}!**\n\n¿Estás listo para transformar tu vida y alcanzar tus objetivos? ¿Quieres sentirte más seguro, más enfocado y más motivado que nunca?\n\n**Aquí está la solución**\n\nMi programa de coaching te ofrece las herramientas y el apoyo que necesitas para:\n\n* **Descubrir tus fortalezas y debilidades**: Identifica tus puntos fuertes y trabaja en tus áreas de mejora.\n* **Establecer metas claras y alcanzables**: Crea un plan de acción personalizado para lograr tus objetivos.\n* **Desarrollar una mentalidad ganadora**: Aprende a superar obstáculos y mantener una actitud positiva.\n* **Mejorar tus relaciones**: Comunica de manera efectiva y construye relaciones sólidas y significativas.\n\n**¿Qué puedes esperar de mi programa de coaching?**\n\n* Sesiones personalizadas y enfocadas en tus necesidades.\n* Acceso a recursos y herramientas exclusivas.\n* Apoyo y motivación constante.\n* Resultados tangibles y medibles.\n\n**¡No te pierdas la oportunidad de cambiar tu vida!** Regístrate ahora y comienza a desbloquear tu máximo potencial. Estoy aquí para ayudarte, {{Nombre}}.\n\n**¡Vamos a hacer que esto suceda!**",
+    "imagen": "/api/media/1774397547768_1.jpg",
+    "offset": 2,
+    "enviados_hoy": 2,
+    "day_tracking": "2026-03-24",
+    "last_run_minute": "2026-03-24 19:15"
+  },
+  {
+    "fecha": "2026-03-24",
+    "hora": "19:40",
+    "estado": "completado (2 total)",
+    "mensaje": "**¡Únete al movimiento de la excelencia conmigo, {{Nombre}}!**\n\n¿Estás listo para desbloquear tu máximo potencial y alcanzar tus objetivos más ambiciosos? ¡Entonces no te pierdas la oportunidad de formar parte de mi equipo de campeones!\n\nComo tu coach, te ayudaré a:\n\n* **Establecer metas claras y alcanzables**: trabajarás en la definición de objetivos precisos y medibles, asegurándote de que estás enfocado en lo que realmente importa.\n* **Desarrollar habilidades y fortalezas**: identificaremos tus puntos fuertes y trabajaremos en su desarrollo, para que puedas aprovechar al máximo tus talentos y lograr resultados excepcionales.\n* **Superar obstáculos y desafíos**: te proporcionaré herramientas y estrategias para enfrentar y superar cualquier obstáculo que se te presente, asegurándote de que no te rindas en el camino.\n* **Mantener la motivación y el enfoque**: te ayudaré a mantener la concentración y la motivación, incluso en los momentos más difíciles, para que puedas alcanzar tus objetivos y cumplir tus sueños.\n\n**¿Qué te espera en este viaje hacia la excelencia?**\n\n* **Sesiones de coaching personalizadas**: trabajaremos juntos para crear un plan de acción personalizado que se adapte a tus necesidades y objetivos.\n* **Acceso a recursos y herramientas exclusivas**: te proporcionaré acceso a recursos y herramientas de alta calidad que te ayudarán a acelerar tu progreso y alcanzar tus metas.\n* **Una comunidad de apoyo y motivación**: te unirás a una comunidad de personas que comparten tus objetivos y valores, y que te apoyarán y motivarán en cada paso del camino.\n\n**¿Estás listo para unirte a la élite y alcanzar la excelencia?** ¡Entonces no te pierdas esta oportunidad! Únete a mí, {{Nombre}}, y comienza a desbloquear tu máximo potencial hoy mismo. ¡Vamos a hacer que suceda!",
+    "imagen": "/api/media/1774399062988_7.jpg",
+    "offset": 2,
+    "enviados_hoy": 2,
+    "day_tracking": "2026-03-24",
+    "last_run_minute": "2026-03-24 19:40"
+  },
+  {
+    "fecha": "2026-12-26",
+    "hora": "16:17",
+    "estado": "pendiente",
+    "mensaje": "? ¡Estamos EN VIVO!\nÚnete ahora a nuestro TikTok que comienza la Bailoterapia ?? ¡desde donde estés!\n? tiktok.com/@titanusgym/live\n¡{{Nombre}}, no te lo pierdas! ?",
+    "imagen": ""
+  },
+  {
+    "fecha": "2026-03-26",
+    "hora": "16:16",
+    "estado": "en_progreso",
+    "mensaje": "? ¡Estamos EN VIVO!\nÚnete ahora a nuestro TikTok que comienza la Bailoterapia ?? ¡desde donde estés!\n? tiktok.com/@titanusgym/live\n¡{{Nombre}}, no te lo pierdas! ?",
+    "imagen": "",
+    "offset": 3,
+    "enviados_hoy": 3,
+    "day_tracking": "2026-03-26",
+    "last_run_minute": "2026-03-26 16:17"
+  },
+  {
+    "fecha": "2026-03-26",
+    "hora": "16:30",
+    "estado": "completado (3 total)",
+    "mensaje": "🚀 ¡Estamos EN VIVO!\nÚnete ahora a nuestro TikTok que comienza la Bailoterapia ?? ¡desde donde estés!\n🚀 tiktok.com/@titanusgym/live\n¡{{Nombre}}, no te lo pierdas! 🤖",
+    "imagen": "",
+    "offset": 3,
+    "enviados_hoy": 3,
+    "day_tracking": "2026-03-26",
+    "last_run_minute": "2026-03-26 16:30"
+  },
+  {
+    "fecha": "2026-03-26",
+    "hora": "17:55",
+    "estado": "completado (3 total)",
+    "mensaje": "🚀 ¡Estamos EN VIVO!\nÚnete ahora a nuestro TikTok que comienza la Bailoterapia ?? ¡desde donde estés!\n🚀 tiktok.com/@titanusgym/live\n¡{{Nombre}}, no te lo pierdas! 🤖",
+    "imagen": "",
+    "target": {
+      "tipo": "grupos",
+      "grupos_ids": [
+        "593963410409-1635346669@g.us"
+      ]
+    },
+    "offset": 3,
+    "enviados_hoy": 3,
+    "day_tracking": "2026-03-26",
+    "last_run_minute": "2026-03-26 17:55"
+  },
+  {
+    "fecha": "2026-03-26",
+    "hora": "18:35",
+    "estado": "expirado (hora pasada)",
+    "mensaje": "🚀 ¡Estamos EN VIVO!\nÚnete ahora a nuestro TikTok que comienza la Bailoterapia ?? ¡desde donde estés!\n🚀 tiktok.com/@titanusgym/live\n¡{{Nombre}}, no te lo pierdas! 🤖",
+    "imagen": "",
+    "target": {
+      "tipo": "grupos",
+      "grupos_ids": [
+        "593963410409-1635346669@g.us"
+      ]
+    }
+  },
+  {
+    "fecha": "2026-03-26",
+    "hora": "19:15",
+    "estado": "completado (1 total)",
+    "mensaje": "🚀 ¡Estamos EN VIVO!\nÚnete ahora a nuestro TikTok que comienza la Bailoterapia ?? ¡desde donde estés!\n🚀 tiktok.com/@titanusgym/live\n¡{{Nombre}}, no te lo pierdas! 🤖",
+    "imagen": "",
+    "target": {
+      "tipo": "grupos",
+      "grupos_ids": [
+        "593963410409-1635346669@g.us"
+      ]
+    },
+    "offset": 1,
+    "enviados_hoy": 1,
+    "day_tracking": "2026-03-26",
+    "last_run_minute": "2026-03-26 19:15"
+  }
+]

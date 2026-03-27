@@ -1,0 +1,90 @@
+[
+  {
+    "i": 0,
+    "estado": "expirado (hora pasada)",
+    "fecha": "2026-03-24",
+    "hora": "12:15",
+    "tipo": "none",
+    "gids": 0
+  },
+  {
+    "i": 1,
+    "estado": "completado (2 total)",
+    "fecha": "2026-03-24",
+    "hora": "12:40",
+    "tipo": "none",
+    "gids": 0
+  },
+  {
+    "i": 2,
+    "estado": "completado (2 total)",
+    "fecha": "2026-03-24",
+    "hora": "13:00",
+    "tipo": "none",
+    "gids": 0
+  },
+  {
+    "i": 3,
+    "estado": "completado (2 total)",
+    "fecha": "2026-03-24",
+    "hora": "19:15",
+    "tipo": "none",
+    "gids": 0
+  },
+  {
+    "i": 4,
+    "estado": "completado (2 total)",
+    "fecha": "2026-03-24",
+    "hora": "19:40",
+    "tipo": "none",
+    "gids": 0
+  },
+  {
+    "i": 5,
+    "estado": "pendiente",
+    "fecha": "2026-12-26",
+    "hora": "16:17",
+    "tipo": "none",
+    "gids": 0
+  },
+  {
+    "i": 6,
+    "estado": "en_progreso",
+    "fecha": "2026-03-26",
+    "hora": "16:16",
+    "tipo": "none",
+    "gids": 0
+  },
+  {
+    "i": 7,
+    "estado": "completado (3 total)",
+    "fecha": "2026-03-26",
+    "hora": "16:30",
+    "tipo": "none",
+    "gids": 0
+  },
+  {
+    "i": 8,
+    "estado": "completado (3 total)",
+    "fecha": "2026-03-26",
+    "hora": "17:55",
+    "tipo": "grupos",
+    "gids": 1
+  },
+  {
+    "i": 9,
+    "estado": "expirado (hora pasada)",
+    "fecha": "2026-03-26",
+    "hora": "18:35",
+    "tipo": "grupos",
+    "gids": 1
+  },
+  {
+    "i": 10,
+    "estado": "completado (1 total)",
+    "fecha": "2026-03-26",
+    "hora": "19:15",
+    "tipo": "grupos",
+    "gids": 1
+  }
+]

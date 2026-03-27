@@ -1,0 +1,30 @@
+[
+  {
+    "id": 189,
+    "nombre": "Grupo",
+    "telefono": "593963410409-1635346",
+    "tipo": "publicidad",
+    "estado": "error"
+  },
+  {
+    "id": 184,
+    "nombre": "Grupo",
+    "telefono": "593963410409-1635346",
+    "tipo": "publicidad",
+    "estado": "error"
+  },
+  {
+    "id": 181,
+    "nombre": "Grupo",
+    "telefono": "593963410409-1635346",
+    "tipo": "publicidad",
+    "estado": "error"
+  },
+  {
+    "id": 177,
+    "nombre": "Grupo",
+    "telefono": "593963410409-1635346",
+    "tipo": "publicidad",
+    "estado": "error"
+  }
+]

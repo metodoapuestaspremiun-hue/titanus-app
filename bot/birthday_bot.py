@@ -75,12 +75,10 @@ def mysql_query(query, params=None, commit=False):
     try:
         conn = pymysql.connect(**DB_CONFIG)
         with conn.cursor() as cursor:
-            # print(f"DEBUG: Executing query: {query[:50]}... Params: {params}")
             cursor.execute(query, params or ())
             
             if commit:
                 conn.commit()
-                # print(f"DEBUG: Committed. LastRowID: {cursor.lastrowid} RowCount: {cursor.rowcount}")
                 return cursor.lastrowid if cursor.lastrowid > 0 else cursor.rowcount
             else:
                 return cursor.fetchall()
@@ -114,6 +112,12 @@ def update_heartbeat():
     print("DEBUG: Heartbeat actualizado con NOW() del servidor DB")
 
 def check_scheduled_broadcasts():
+    """Procesa las difusiones programadas del dashboard.
+    
+    LÓGICA CLAVE: Solo procesa una campaña si la hora actual de Ecuador
+    coincide con la hora programada de esa campaña (ventana de ejecución).
+    Las campañas en estado 'pendiente' solo se activan cuando llega su hora.
+    """
     conf = get_config_map()
     json_str = conf.get('difusiones_programadas_json', '[]')
     try:
@@ -124,89 +128,133 @@ def check_scheduled_broadcasts():
     ec_tz = pytz.timezone('America/Guayaquil')
     now = datetime.now(ec_tz)
     today_date = now.strftime("%Y-%m-%d")
-    current_time = now.strftime("%H:%M")
-    current_hour_key = now.strftime("%Y-%m-%d %H") # Para evitar ejecuciones múltiples en la misma hora
+    now_h = now.hour
+    now_m = now.minute
+    now_total = now_h * 60 + now_m
+    
+    print(f"DEBUG BROADCAST: Hora Ecuador={now.strftime('%H:%M:%S')}, Fecha={today_date}, Campañas={len(scheduled)}")
     
     changes = False
     
-    # --- CÁLCULO DE LÍMITES GLOBALES ---
-    global_today_count = 0
-    any_item_run_this_hour = False
-    
-    for item in scheduled:
-        if item.get('day_tracking') == today_date:
-            global_today_count += item.get('enviados_hoy', 0)
-        if item.get('last_run_hour') == current_hour_key:
-            any_item_run_this_hour = True
-
-    DAILY_LIMIT_GLOBAL = 80
-    HOURLY_LIMIT_GLOBAL = 20
-    
-    # Si ya se corrió algo en esta hora, saltamos el chequeo general (respetando 20/hora total)
-    # Nota: Esto asume que cada ejecución procesa un lote completo o agota la cuota horaria.
-    if any_item_run_this_hour:
-        print(f"DEBUG: Ya se envió un lote de publicidad en la hora {current_hour_key}. Esperando próxima hora.")
-        # No retornamos aún, procesamos inicializaciones de 'pendiente'
-    
-    for item in scheduled:
-        # Inicializar estado si es 'pendiente'
-        if item.get('estado') == 'pendiente':
-            if item['fecha'] < today_date or (item['fecha'] == today_date and item['hora'] <= current_time):
+    for idx, item in enumerate(scheduled):
+        item_fecha = item.get('fecha', '')
+        item_estado = item.get('estado', '')
+        item_hora = item.get('hora', '??:??')
+        target_data = item.get('target', {})
+        target_type = target_data.get('tipo', 'clientes') if target_data else 'clientes'
+        
+        print(f"DEBUG BROADCAST [{idx}]: fecha={item_fecha}, hora={item_hora}, estado={item_estado}, target={target_type}")
+        
+        # Ignorar campañas futuras (fecha posterior a hoy)
+        if item_fecha > today_date:
+            print(f"DEBUG BROADCAST [{idx}]: Campaña es para el futuro, saltando.")
+            continue
+        
+        # Ignorar campañas ya completadas o expiradas
+        if item_estado.startswith('completado') or item_estado.startswith('expirado'):
+            continue
+            
+        # *** VERIFICAR QUE ES LA HORA CORRECTA DE ESTA CAMPAÑA ***
+        try:
+            item_h, item_m = map(int, item_hora.split(':'))
+            item_total = item_h * 60 + item_m
+            diff = now_total - item_total
+        except Exception as e:
+            print(f"ERROR parseando hora de campaña [{idx}]: {e}")
+            continue
+        
+        # Activar campaña pendiente SOLO cuando llega su hora
+        if item_estado == 'pendiente':
+            if item_fecha == today_date and diff >= 0 and diff < 10:
+                # ¡Es la hora! Activar
+                print(f"DEBUG BROADCAST [{idx}]: ✅ ACTIVANDO campaña pendiente (diff={diff} min)")
                 item['estado'] = 'en_progreso'
                 item['offset'] = 0
                 item['enviados_hoy'] = 0
                 item['day_tracking'] = today_date
                 changes = True
-        
-        # Procesar si está 'en_progreso' y NO hemos excedido límites globales esta hora
-        if item.get('estado') == 'en_progreso' and not any_item_run_this_hour:
-            # Reset Diario Local para el item
-            if item.get('day_tracking') != today_date:
-                item['enviados_hoy'] = 0
-                item['day_tracking'] = today_date
+            elif item_fecha < today_date:
+                # Campaña de día anterior nunca se envió
+                print(f"DEBUG BROADCAST [{idx}]: Campaña de fecha pasada ({item_fecha}). Marcando expirada.")
+                item['estado'] = 'expirado (fecha pasada)'
                 changes = True
+                continue
+            elif diff >= 10:
+                # Ya pasó la ventana de activación
+                print(f"DEBUG BROADCAST [{idx}]: Hora pasada (diff={diff} min). Expirando.")
+                item['estado'] = 'expirado (hora pasada)'
+                changes = True
+                continue
+            else:
+                # Aún no es la hora
+                print(f"DEBUG BROADCAST [{idx}]: Esperando hora (faltan {-diff} min)")
+                continue
+        
+        # Solo procesar si está 'en_progreso'
+        if item.get('estado') != 'en_progreso':
+            continue
+        
+        # Ventana de ejecución: hasta 10 min después de la hora programada
+        if diff < 0 or diff >= 10:
+            if diff >= 10 and item.get('offset', 0) == 0:
+                print(f"DEBUG BROADCAST [{idx}]: Campaña en_progreso pero sin envíos y fuera de ventana. Expirando.")
+                item['estado'] = 'expirado (hora pasada)'
+                changes = True
+            continue
             
-            # Verificar Límite Diario GLOBAL
-            if global_today_count >= DAILY_LIMIT_GLOBAL:
-                print(f"DEBUG: Límite GLOBAL diario alcanzado ({global_today_count}/{DAILY_LIMIT_GLOBAL}).")
-                break # Salimos del loop de procesamiento
-
-            # Calcular tamaño del lote restante GLOBAL
-            remaining_today_global = DAILY_LIMIT_GLOBAL - global_today_count
-            batch_size = min(HOURLY_LIMIT_GLOBAL, remaining_today_global)
+        # *** VERIFICAR QUE NO SE EJECUTÓ YA EN ESTE MINUTO ***
+        current_minute_key = now.strftime("%Y-%m-%d %H:%M")
+        if item.get('last_run_minute') == current_minute_key:
+            print(f"DEBUG BROADCAST [{idx}]: Ya procesada este minuto ({current_minute_key}). Esperando.")
+            continue
             
-            try:
-                # Extraer snapshot de mensaje e imagen personalizados
-                custom_msg = item.get('mensaje')
-                custom_img = item.get('imagen')
-                offset = item.get('offset', 0)
-                
-                # Ejecutar lote paginado
-                count = generate_queue(
-                    tipo_filtro='publicidad', 
-                    allow_duplicates=True,
-                    custom_msg=custom_msg,
-                    custom_img=custom_img,
-                    limit=batch_size,
-                    offset=offset
-                )
-                
-                if count > 0:
-                    item['offset'] = offset + count
-                    item['enviados_hoy'] = item.get('enviados_hoy', 0) + count
-                    item['last_run_hour'] = current_hour_key
-                    global_today_count += count
-                    any_item_run_this_hour = True # Bloqueamos otros items en esta misma hora
-                    log_system("success", f"Difusión {item['hora']}: Lote enviado ({count} msgs). Offset: {item['offset']}. Total Hoy Global: {global_today_count}")
-                    changes = True
-                else:
-                    # Si devuelve 0, asumimos que se acabaron los clientes
-                    item['estado'] = f"completado ({item['offset']} total)"
-                    log_system("success", f"Difusión {item['hora']} FINALIZADA. Total: {item['offset']}")
-                    changes = True
+        # Reset Diario Local para el item
+        if item.get('day_tracking') != today_date:
+            item['enviados_hoy'] = 0
+            item['day_tracking'] = today_date
+            changes = True
+        
+        try:
+            # Extraer snapshot de mensaje e imagen personalizados
+            custom_msg = item.get('mensaje')
+            custom_img = item.get('imagen')
+            offset = item.get('offset', 0)
+            batch_size = 20  # Máximo por ejecución
+            
+            print(f"DEBUG BROADCAST [{idx}]: Ejecutando generate_queue target={target_type}, offset={offset}, batch={batch_size}")
+            if target_type == 'grupos':
+                grupos_ids = target_data.get('grupos_ids', [])
+                print(f"DEBUG BROADCAST [{idx}]: Grupos seleccionados ({len(grupos_ids)}): {grupos_ids}")
+            
+            # Ejecutar lote paginado
+            count = generate_queue(
+                tipo_filtro='publicidad', 
+                allow_duplicates=True,
+                custom_msg=custom_msg,
+                custom_img=custom_img,
+                limit=batch_size,
+                offset=offset,
+                target_data=target_data
+            )
+            
+            print(f"DEBUG BROADCAST [{idx}]: generate_queue retornó {count}")
+            
+            if count > 0:
+                item['offset'] = offset + count
+                item['enviados_hoy'] = item.get('enviados_hoy', 0) + count
+                item['last_run_minute'] = current_minute_key
+                log_system("success", f"Difusión {item_hora}: Lote enviado ({count} msgs, target={target_type}). Offset: {item['offset']}.")
+                changes = True
+            else:
+                # Si devuelve 0, se acabaron los destinatarios
+                item['estado'] = f"completado ({item['offset']} total)"
+                log_system("success", f"Difusión {item_hora} FINALIZADA (target={target_type}). Total: {item['offset']}")
+                changes = True
                     
-            except Exception as e:
-                log_system("error", f"Error en batch difusión {item['hora']}: {e}")
+        except Exception as e:
+            log_system("error", f"Error en batch difusión {item_hora}: {e}")
+            import traceback
+            traceback.print_exc()
     
     if changes:
         mysql_query(
@@ -214,6 +262,43 @@ def check_scheduled_broadcasts():
             ("difusiones_programadas_json", json.dumps(scheduled)),
             commit=True
         )
+        print(f"DEBUG BROADCAST: JSON actualizado en DB.")
+
+def call_openai_ai(prompt_sistema, client_name, api_key, model="gpt-3.5-turbo"):
+    if not api_key or not prompt_sistema: return None
+    url = "https://api.openai.com/v1/chat/completions"
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    payload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": f"ERES UN COACH TITANUS. REGLA CRÍTICA: NO uses nombres propios reales. Usa SIEMPRE el placeholder {{{{Nombre}}}}. Prompt: {prompt_sistema}"},
+            {"role": "user", "content": f"Genera un mensaje de cumpleaños para {client_name}."}
+        ]
+    }
+    try:
+        r = requests.post(url, json=payload, headers=headers, timeout=20)
+        return r.json()['choices'][0]['message']['content'].strip()
+    except Exception as e:
+        print(f"DEBUG: OpenAI API Err: {e}")
+        return None
+
+def call_groq_ai(prompt_sistema, client_name, api_key):
+    if not api_key or not prompt_sistema: return None
+    url = "https://api.groq.com/openai/v1/chat/completions"
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    payload = {
+        "model": "llama-3.3-70b-versatile",
+        "messages": [
+            {"role": "system", "content": f"ERES UN COACH TITANUS. REGLA CRÍTICA: NO uses nombres propios reales. Usa SIEMPRE el placeholder {{{{Nombre}}}}. Prompt: {prompt_sistema}"},
+            {"role": "user", "content": f"Genera un mensaje de cumpleaños para {client_name}."}
+        ]
+    }
+    try:
+        r = requests.post(url, json=payload, headers=headers, timeout=20)
+        return r.json()['choices'][0]['message']['content'].strip()
+    except Exception as e:
+        print(f"DEBUG: Groq API Err: {e}")
+        return None
 
 def call_gemini_ai(prompt_sistema, client_name, api_key):
     if not api_key or not prompt_sistema:
@@ -246,7 +331,7 @@ def call_gemini_ai(prompt_sistema, client_name, api_key):
         print(f"DEBUG: Gemini API Err: {e}")
         return None
 
-def generate_queue(tipo_filtro=None, allow_duplicates=False, custom_msg=None, custom_img=None, limit=None, offset=None):
+def generate_queue(tipo_filtro=None, allow_duplicates=False, custom_msg=None, custom_img=None, limit=None, offset=None, target_data=None):
     # FIX: Usar pytz para la fecha en generate_queue (igual que en check_and_send)
     ec_tz = pytz.timezone('America/Guayaquil')
     now = datetime.now(ec_tz)
@@ -258,11 +343,28 @@ def generate_queue(tipo_filtro=None, allow_duplicates=False, custom_msg=None, cu
     clients_to_notify = []
 
     if tipo_filtro == 'publicidad':
-        res = mysql_query(
-            "SELECT nombre, telefono FROM clientes WHERE estado = 'activo' OR estado IS NULL OR estado = 'vencido' LIMIT %s OFFSET %s",
-            (limit if limit else 1000, offset if offset else 0)
-        ) or []
-        for c in res: clients_to_notify.append({**c, 'tipo': 'publicidad'})
+        # FIX: Respetar target_data para enviar solo a grupos o solo a clientes
+        target_type = target_data.get('tipo', 'clientes') if target_data else 'clientes'
+        print(f"DEBUG: Publicidad target_type = {target_type}")
+        
+        if target_type == 'grupos':
+            # Solo enviar a los grupos seleccionados
+            grupos_ids = target_data.get('grupos_ids', [])
+            start = offset if offset else 0
+            end = start + (limit if limit else len(grupos_ids))
+            batch_grupos = grupos_ids[start:end]
+            print(f"DEBUG QUEUE: Grupos total={len(grupos_ids)}, batch={len(batch_grupos)} (offset {start} -> {end})")
+            
+            for g_id in batch_grupos:
+                print(f"DEBUG QUEUE: Encolando grupo ID: '{g_id}'")
+                clients_to_notify.append({'nombre': 'Grupo', 'telefono': g_id, 'tipo': 'publicidad'})
+        else:
+            # Solo enviar a clientes individuales
+            res = mysql_query(
+                "SELECT nombre, telefono FROM clientes WHERE estado = 'activo' OR estado IS NULL OR estado = 'vencido' LIMIT %s OFFSET %s",
+                (limit if limit else 1000, offset if offset else 0)
+            ) or []
+            for c in res: clients_to_notify.append({**c, 'tipo': 'publicidad'})
     else:
         # Bdays y Vencimientos
         res = mysql_query(
@@ -272,7 +374,6 @@ def generate_queue(tipo_filtro=None, allow_duplicates=False, custom_msg=None, cu
         for c in res:
             dob_str = str(c.get('fecha_nacimiento'))
             match = today_md in dob_str
-            # print(f"DEBUG: Checking {c['nombre']} DOB: {dob_str} Match: {match}")
             if c.get('fecha_nacimiento') and match:
                 print(f"DEBUG: HIT! Adding {c['nombre']} to queue")
                 clients_to_notify.append({**c, 'tipo': 'cumpleaños'})
@@ -288,22 +389,18 @@ def generate_queue(tipo_filtro=None, allow_duplicates=False, custom_msg=None, cu
     enqueued = 0
     # Prioridad: custom_img > config global
     img_publicidad = custom_img if custom_img else (conf.get("publicidad_imagen") if tipo_filtro == 'publicidad' else None)
+    # Imagen para cumpleaños (configurada en el dashboard)
+    img_cumple = conf.get("imagen_cumple") or conf.get("cumple_imagen") or conf.get("birthday_image")
 
     for cl in clients_to_notify:
         # Pasamos custom_msg a generate_message_content
         msg = generate_message_content(cl, conf, custom_msg)
         
-        # Anteponer [MEDIA:url] si es publicidad
-        if cl['tipo'] == 'publicidad' and img_publicidad and len(img_publicidad) > 5:
+        # Anteponer [MEDIA:url] si hay imagen configurada
+        if cl['tipo'] == 'publicidad' and img_publicidad and len(str(img_publicidad)) > 5:
             msg = f"[MEDIA:{img_publicidad}] {msg}"
-            
-        payload = {
-            "nombre": cl['nombre'], 
-            "telefono": cl['telefono'], 
-            "tipo": cl['tipo'], 
-            "mensaje": msg, 
-            "estado": "pendiente"
-        }
+        elif cl['tipo'] == 'cumpleaños' and img_cumple and len(str(img_cumple)) > 5:
+            msg = f"[MEDIA:{img_cumple}] {msg}"
             
         insert_res = mysql_query(
             "INSERT INTO cola_mensajes (nombre, telefono, tipo, mensaje, estado) VALUES (%s, %s, %s, %s, %s)",
@@ -320,44 +417,42 @@ def generate_queue(tipo_filtro=None, allow_duplicates=False, custom_msg=None, cu
 def generate_message_content(cl, conf, custom_msg=None):
     tipo = cl['tipo']
     
-    # 1. Definir claves según el Dashboard
-    # 'prompt_tipo' -> Instrucciones para IA
-    # 'prompt_tipo_static' -> Mensaje Fijo
     key_base = "prompt_cumpleanios" if tipo == 'cumpleaños' else f"prompt_{tipo}"
     key_static = f"{key_base}_static"
     
     prompt_ia = conf.get(key_base, "")
-    # Si viene un mensaje personalizado (desde programación), usarlo. Si no, usar el del config.
     mensaje_fijo = custom_msg if custom_msg else conf.get(key_static, f"¡Hola {{{{Nombre}}}}!")
     
-    # 2. Verificar Modo
-    # Para cumpleaños, leemos 'modo_mensaje_cumple'. Para otros, asumimos 'Fijo' o lo que diga el config si existiera.
     modo_ia = False
     if tipo == 'cumpleaños':
-        modo_ia = conf.get("modo_mensaje_cumple", "Fijo") == "IA"
+        modo_ia = conf.get("prompt_cumpleanios_mode", "Fijo") == "ai"
     
-    # 3. MODO IA: Usar prompt_ia como instrucciones para Gemini
     mensaje_crudo = ""
     if modo_ia:
         print(f"DEBUG: Modo IA activado para {cl['nombre']}")
-        gemini_key = conf.get("gemini_api_key")
+        provider = conf.get("ai_provider", "gemini")
         
-        if gemini_key and prompt_ia:
-            ai_msg = call_gemini_ai(prompt_ia, cl['nombre'], gemini_key)
-            if ai_msg:
-                print(f"DEBUG: ✅ Mensaje IA generado")
-                mensaje_crudo = ai_msg
-            else:
-                print(f"DEBUG: ⚠️ IA falló, usando mensaje fijo")
-                mensaje_crudo = mensaje_fijo
+        ai_msg = None
+        if provider == 'openai':
+            api_key = conf.get("openai_api_key")
+            model = conf.get("openai_model", "gpt-3.5-turbo")
+            ai_msg = call_openai_ai(prompt_ia, cl['nombre'], api_key, model)
+        elif provider == 'gemini':
+            api_key = conf.get("gemini_api_key")
+            ai_msg = call_gemini_ai(prompt_ia, cl['nombre'], api_key)
+        elif provider == 'groq':
+            api_key = conf.get("groq_api_key") or os.getenv("GROQ_API_KEY")
+            ai_msg = call_groq_ai(prompt_ia, cl['nombre'], api_key)
+
+        if ai_msg:
+            print(f"DEBUG: ✅ Mensaje IA generado via {provider}")
+            mensaje_crudo = ai_msg
         else:
-            print(f"DEBUG: ⚠️ Sin API key o Prompt vacio, usando mensaje fijo")
+            print(f"DEBUG: ⚠️ IA falló ({provider}), usando mensaje fijo")
             mensaje_crudo = mensaje_fijo
     else:
-        # MODO FIJO
         mensaje_crudo = mensaje_fijo
     
-    # 4. PROCESAMIENTO FINAL: Reemplazo de variables (Aplica para ambos modos)
     mensaje = mensaje_crudo.replace("{{Nombre}}", cl['nombre'])
     mensaje = mensaje.replace("{{nombre}}", cl['nombre'])
     mensaje = mensaje.replace("{{Name}}", cl['nombre']) 
@@ -394,19 +489,24 @@ def process_batch(tipo=None):
     return count
 
 def send_wa(num, text):
-    clean = "".join(filter(str.isdigit, num))
+    # FIX: Preservar JIDs de grupo (contienen @g.us) sin limpiar
+    if "@" in num:
+        clean = num
+    else:
+        clean = "".join(filter(str.isdigit, num))
     
     # Lógica de envío de medios optimizada
     if "[MEDIA:" in text:
         try:
-            # Formato esperado: "[MEDIA:https://url.com/img.jpg] Caption opcional"
-            # Usamos split con maxsplit=1 para separar solo la primera ocurrencia
             parts = text.split("]", 1)
-            media_part = parts[0] # "[MEDIA:https://url.com/img.jpg"
+            media_part = parts[0] 
             caption_part = parts[1].strip() if len(parts) > 1 else ""
             
-            # Extraer URL (quitamos "[MEDIA:")
             media_url = media_part.replace("[MEDIA:", "").strip()
+            
+            # Si es relativa, convertir a absoluta (Vercel Prod)
+            if media_url.startswith("/"):
+                media_url = f"https://titanus-app.vercel.app{media_url}"
             
             if media_url.startswith("http"):
                 url = f"{EVOLUTION_API_URL}/message/sendMedia/{EVOLUTION_INSTANCE_NAME}"
@@ -419,9 +519,12 @@ def send_wa(num, text):
                     "delay": 1200
                 }
                 
-                print(f"DEBUG: Enviando MEDIA a {clean} | URL: {media_url[:30]}...")
+                print(f"DEBUG: Enviando MEDIA a {clean} | URL: {media_url[:40]}...")
                 r = requests.post(url, json=payload, headers=headers, timeout=30)
-                return r.status_code in [200, 201], r.text
+                if r.status_code in [200, 201]:
+                    return True, r.text
+                else:
+                    print(f"DEBUG: Evolution API Error: {r.text}")
         except Exception as e:
             print(f"ERROR parseando media: {e}")
             pass # Fallback a texto
@@ -452,11 +555,14 @@ if __name__ == "__main__":
     ec_tz = pytz.timezone('America/Guayaquil')
     now_ec = datetime.now(ec_tz)
     now_str = now_ec.strftime("%H:%M")
+    now_h = now_ec.hour
+    now_m = now_ec.minute
     
     update_heartbeat()
-    print(f"[{now_str}] 🤖 BOT ACTIVO | MODO: {mode} | TARGET: {target}")
+    print(f"[{now_str}] 🤖 BOT ACTIVO | MODO: {mode} | TARGET CUMPLEAÑOS: {target}")
 
     if mode in ["generator", "cron", "force"]:
+        # === PASO 1: Procesar CAMPAÑAS programadas ===
         print("DEBUG: Entrando a check_scheduled_broadcasts...")
         try:
             check_scheduled_broadcasts()
@@ -464,28 +570,47 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"ERROR en check_scheduled_broadcasts: {e}")
 
-        print(f"DEBUG: Comparando {now_str} == {target}")
+        # === PASO 2: Generar CUMPLEAÑOS si es la hora correcta ===
+        try:
+            target_h, target_m = map(int, target.split(':'))
+            target_total = target_h * 60 + target_m
+            now_total = now_h * 60 + now_m
+            diff = now_total - target_total
+            # El bot corre cada 1 min.
+            # 0 <= diff < 1 garantiza que solo se dispare en el MINUTO EXACTO programado.
+            is_target_time = 0 <= diff < 1
+        except Exception as e:
+            print(f"ERROR calculando diff de tiempo: {e}")
+            is_target_time = now_str == target
         
-        # FIX: Validación estricta de hora para evitar repeticiones cada 5 minutos
-        # Solo ejecuta si es el minuto exacto O si se fuerza manualmente
-        if now_str == target or mode == "force":
-            print(f"DEBUG: ✅ ES LA HORA ({now_str}). Ejecutando generación...")
+        # Control anti-duplicados: Verificar si ya se generaron CUMPLEAÑOS en este minuto exacto
+        current_minute_key = now_ec.strftime("%Y-%m-%d %H:%M")
+        already_run_this_minute = mysql_query(
+            "SELECT COUNT(*) as c FROM cola_mensajes WHERE tipo = 'cumpleaños' AND DATE_FORMAT(CONVERT_TZ(fecha_creacion, '+00:00', '-05:00'), '%%Y-%%m-%%d %%H:%%i') = %s",
+            (current_minute_key,)
+        )
+        already_count_min = already_run_this_minute[0]['c'] if already_run_this_minute else 0
+        
+        print(f"DEBUG: CUMPLEAÑOS — Hora actual: {now_ec.strftime('%H:%M:%S')}, Target: {target}, Es hora: {is_target_time}, Ya procesado este minuto: {already_count_min}")
+        
+        if (is_target_time and already_count_min == 0) or mode == "force":
+            print(f"DEBUG: ✅ EJECUTANDO GENERACIÓN DE CUMPLEAÑOS...")
             try:
-                # Generar CUMPLEAÑOS
                 generate_queue('cumpleaños')
-                # Generar PUBLICIDAD (Broadcasts)
-                generate_queue('publicidad')
-                print("DEBUG: Finalizó generate_queue (cumpleaños y publicidad)")
+                print("DEBUG: Finalizó generate_queue (cumpleaños)")
             except Exception as e:
                 print(f"ERROR en generate_queue: {e}")
         else:
-            print(f"DEBUG: ⏳ No es la hora de envío ({now_str} != {target}).")
+            if is_target_time:
+                print(f"DEBUG: ⏳ Ya se procesaron los cumpleaños en este minuto ({current_minute_key}).")
+            else:
+                print(f"DEBUG: ⏳ Esperando hora de cumpleaños ({now_str} != {target}).")
 
+    # === PASO 3: Enviar todos los mensajes PENDIENTES ===
     if mode in ["worker", "cron"]:
         print("DEBUG: Entrando a fase worker...")
         t_filtro = sys.argv[sys.argv.index("--type") + 1] if "--type" in sys.argv else None
         if mode == "cron" and not t_filtro:
-            # FIX: Agregado 'publicidad' para que se envíen las difusiones programadas
             for t in ["cumpleaños", "vencimiento", "seguimiento", "publicidad"]: 
                 print(f"DEBUG: Procesando lote para tipo: {t}")
                 process_batch(tipo=t)

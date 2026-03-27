@@ -54,6 +54,52 @@ export default function ConfigPage() {
     const [scheduledList, setScheduledList] = useState<any[]>([]);
     const [activeTab, setActiveTab] = useState<TabId>("conexion");
 
+    const [groups, setGroups] = useState<any[]>([]);
+    const [loadingGroups, setLoadingGroups] = useState(false);
+    const [campaignTarget, setCampaignTarget] = useState<'clientes' | 'grupos' | 'ambos'>('clientes');
+    const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
+    const [editIndex, setEditIndex] = useState<number | null>(null);
+    const [searchGroupTerm, setSearchGroupTerm] = useState('');
+
+    const fetchWhatsAppGroups = async () => {
+        setLoadingGroups(true);
+        try {
+            const res = await axios.get('/api/whatsapp/groups');
+            setGroups(res.data);
+        } catch(e) { console.error(e); }
+        setLoadingGroups(false);
+    };
+
+    const handleOpenScheduleModal = (index: number | null = null, forceNow: boolean = false) => {
+        if(groups.length === 0) fetchWhatsAppGroups();
+        setEditIndex(index);
+        
+        if (index !== null) {
+            const item = scheduledList[index];
+            setScheduleDate(item.fecha);
+            setScheduleTime(item.hora);
+            if (item.target) {
+                setCampaignTarget(item.target.tipo || 'clientes');
+                setSelectedGroups(item.target.grupos_ids || []);
+            } else {
+                setCampaignTarget('clientes');
+                setSelectedGroups([]);
+            }
+        } else {
+            if (forceNow) {
+                 const now = new Date();
+                 setScheduleDate(now.toISOString().split('T')[0]);
+                 setScheduleTime(now.toLocaleTimeString('es-EC', { hour12: false, hour: '2-digit', minute: '2-digit' }));
+            } else {
+                 setScheduleDate("");
+                 setScheduleTime("");
+            }
+            setCampaignTarget('clientes');
+            setSelectedGroups([]);
+        }
+        setShowScheduleModal(true);
+    };
+
     useEffect(() => {
         fetchConfigs();
         checkWhatsAppStatus();
@@ -427,7 +473,7 @@ export default function ConfigPage() {
                             </div>
 
                             <div className="bg-orange-500/5 border border-orange-500/20 rounded-2xl p-4 text-sm text-orange-300">
-                                📢 Las campañas se envían a <b>todos</b> tus clientes. Puedes enviar al instante o programarlas para una fecha y hora específica.
+                                📢 Las campañas se envían a <b>clientes</b> o a <b>grupos de WhatsApp</b> según tu selección. Puedes enviar al instante o programarlas para una fecha y hora específica.
                             </div>
 
                             <PromptCard
@@ -510,25 +556,13 @@ export default function ConfigPage() {
                                 </h3>
                                 <div className="grid grid-cols-2 gap-4">
                                     <button
-                                        onClick={async () => {
-                                            if (confirm("⚠️ ¿Estás seguro de INICIAR EL ENVÍO AHORA a TODA la base de datos?\n\nEl sistema enviará los mensajes por lotes para proteger tu cuenta.")) {
-                                                try {
-                                                    const now = new Date();
-                                                    const today = now.toISOString().split('T')[0];
-                                                    const time = now.toLocaleTimeString('es-EC', { hour12: false, hour: '2-digit', minute: '2-digit' });
-                                                    const newItem = { fecha: today, hora: time, estado: 'pendiente', mensaje: configs.prompt_publicidad_static || "", imagen: configs.publicidad_imagen || "" };
-                                                    const newList = [...scheduledList, newItem];
-                                                    await saveConfig('difusiones_programadas_json', JSON.stringify(newList));
-                                                    alert("✅ ¡Envío Iniciado! El bot procesará el primer lote en unos minutos.");
-                                                } catch (e: any) { alert(`❌ Error: ${e.message}`); }
-                                            }
-                                        }}
+                                        onClick={() => handleOpenScheduleModal(null, true)}
                                         className="bg-spartan-yellow text-black font-extrabold py-4 rounded-xl hover:scale-105 transition-all flex items-center justify-center gap-2"
                                     >
                                         <Send size={20} />
                                         ENVIAR AHORA
                                     </button>
-                                    <button onClick={() => setShowScheduleModal(true)}
+                                    <button onClick={() => handleOpenScheduleModal(null, false)}
                                         className="bg-white/10 text-white font-bold py-4 rounded-xl hover:bg-white/20 transition-all flex items-center justify-center gap-2"
                                     >
                                         <Settings size={20} />
@@ -543,17 +577,30 @@ export default function ConfigPage() {
                                     <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider block">Próximas Difusiones Programadas</label>
                                     <div className="space-y-3">
                                         {scheduledList.map((item, idx) => (
-                                            <div key={idx} className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/5 group hover:border-white/10 transition-all">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="h-8 w-8 rounded-lg bg-spartan-yellow/10 flex items-center justify-center text-spartan-yellow"><Zap size={16} /></div>
-                                                    <div>
-                                                        <div className="text-sm font-bold text-white">{item.fecha} — {item.hora}</div>
-                                                        <div className="text-[10px] text-gray-500 uppercase font-black">{item.estado}</div>
+                                            <div key={idx} className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/5 group hover:border-white/10 transition-all cursor-pointer"
+                                                onClick={(e) => {
+                                                    // Evitar abrir modal si se hace click en el botón rojo
+                                                    if ((e.target as any).closest('button')) return;
+                                                    handleOpenScheduleModal(idx, false);
+                                                }}>
+                                                <div className="flex flex-col gap-1 w-full">
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="h-8 w-8 rounded-lg bg-spartan-yellow/10 flex items-center justify-center text-spartan-yellow"><Zap size={16} /></div>
+                                                            <div>
+                                                                <div className="text-sm font-bold text-white">{item.fecha} — {item.hora}</div>
+                                                                <div className="text-[10px] text-gray-500 uppercase font-black">{item.estado}</div>
+                                                            </div>
+                                                        </div>
+                                                        <button onClick={() => { const newList = scheduledList.filter((_, i) => i !== idx); saveConfig('difusiones_programadas_json', JSON.stringify(newList)); }}
+                                                            className="opacity-0 group-hover:opacity-100 p-2 text-red-500 hover:bg-red-500/10 rounded-lg transition-all"
+                                                        ><XCircle size={18} /></button>
+                                                    </div>
+                                                    <div className="text-[11px] text-gray-400 mt-2 truncate">
+                                                        Destino: <span className="text-spartan-yellow font-bold uppercase">{item.target ? item.target.tipo : 'clientes'}</span>
+                                                        {item.target?.tipo === 'grupos' && ` (${item.target.grupos_ids?.length || 0} seleccionados)`}
                                                     </div>
                                                 </div>
-                                                <button onClick={() => { const newList = scheduledList.filter((_, i) => i !== idx); saveConfig('difusiones_programadas_json', JSON.stringify(newList)); }}
-                                                    className="opacity-0 group-hover:opacity-100 p-2 text-red-500 hover:bg-red-500/10 rounded-lg transition-all"
-                                                ><XCircle size={18} /></button>
                                             </div>
                                         ))}
                                     </div>
@@ -567,11 +614,75 @@ export default function ConfigPage() {
             {/* ========== SCHEDULE MODAL ========== */}
             {showScheduleModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-300">
-                    <div className="bg-spartan-charcoal rounded-3xl border border-white/10 p-8 w-full max-w-md shadow-2xl space-y-6">
+                    <div className="bg-spartan-charcoal rounded-3xl border border-white/10 p-8 w-full max-w-md shadow-2xl space-y-6 max-h-[90vh] overflow-y-auto">
                         <div className="space-y-2">
-                            <h3 className="text-2xl font-bold text-white">Programar Difusión</h3>
-                            <p className="text-gray-400 text-sm">Elige cuándo quieres que el bot envíe este mensaje a todos los guerreros.</p>
+                            <h3 className="text-2xl font-bold text-white">{editIndex !== null ? 'Editar Programación' : 'Programar Difusión'}</h3>
+                            <p className="text-gray-400 text-sm">Elige cuándo y a quiénes quieres que el bot envíe este mensaje.</p>
                         </div>
+                        
+                        {/* Target Selection */}
+                        <div className="space-y-4 border-b border-white/10 pb-6">
+                            <label className="text-xs font-bold text-gray-500 uppercase tracking-widest block">Destinatarios</label>
+                            <div className="grid grid-cols-2 gap-3">
+                                <button 
+                                    onClick={() => setCampaignTarget('clientes')}
+                                    className={`p-3 rounded-xl border transition-all text-sm font-bold ${campaignTarget === 'clientes' ? 'bg-spartan-yellow/20 border-spartan-yellow text-spartan-yellow' : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10'}`}
+                                >
+                                    Todos los Clientes
+                                </button>
+                                <button 
+                                    onClick={() => setCampaignTarget('grupos')}
+                                    className={`p-3 rounded-xl border transition-all text-sm font-bold flex flex-col items-center justify-center gap-1 ${campaignTarget === 'grupos' ? 'bg-spartan-yellow/20 border-spartan-yellow text-spartan-yellow' : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10'}`}
+                                >
+                                    <span>Grupos ({groups.length})</span>
+                                    {loadingGroups && <RefreshCw size={12} className="animate-spin" />}
+                                </button>
+                            </div>
+                            
+                             {campaignTarget === 'grupos' && (
+                                 <div className="mt-4 p-4 bg-black/30 rounded-xl border border-white/10 h-64 flex flex-col space-y-2 relative">
+                                     <input 
+                                         type="text" 
+                                         placeholder="Buscar un grupo..."
+                                         value={searchGroupTerm}
+                                         onChange={(e) => setSearchGroupTerm(e.target.value)}
+                                         className="w-full bg-white/5 border border-white/10 p-2 rounded-lg text-sm text-gray-200 focus:ring-1 focus:ring-spartan-yellow focus:outline-none placeholder-gray-500"
+                                     />
+                                     <div className="flex-1 overflow-y-auto pr-2 mt-2 space-y-1">
+                                     {groups.length > 0 && (
+                                         <div className="sticky top-0 bg-black/90 p-2 border-b border-white/10 mb-2 rounded z-10 flex flex-wrap justify-between items-center text-xs gap-2">
+                                            <span className="text-gray-400">{selectedGroups.length} seleccionados</span>
+                                            <div className="space-x-3">
+                                              <button onClick={()=> {
+                                                  const filteredIds = groups.filter(g => g.name.toLowerCase().includes(searchGroupTerm.toLowerCase())).map(g => g.id);
+                                                  setSelectedGroups(Array.from(new Set([...selectedGroups, ...filteredIds])));
+                                              }} className="text-spartan-yellow hover:underline">Todos Visibles</button>
+                                              <button onClick={()=> setSelectedGroups([])} className="text-spartan-yellow hover:underline">Ninguno</button>
+                                            </div>
+                                         </div>
+                                     )}
+                                     {groups.filter(g => g.name.toLowerCase().includes(searchGroupTerm.toLowerCase())).map(g => (
+                                        <label key={g.id} className="flex items-start gap-3 p-2 hover:bg-white/5 rounded-lg cursor-pointer transition-all">
+                                            <input 
+                                                type="checkbox" 
+                                                checked={selectedGroups.includes(g.id)}
+                                                onChange={(e) => {
+                                                    if (e.target.checked) setSelectedGroups([...selectedGroups, g.id]);
+                                                    else setSelectedGroups(selectedGroups.filter(id => id !== g.id));
+                                                }}
+                                                className="mt-1 flex-shrink-0 w-4 h-4 rounded border-gray-600 bg-gray-800 focus:ring-spartan-yellow text-spartan-yellow"
+                                            />
+                                            <span className="text-sm text-gray-300 break-words">{g.name}</span>
+                                        </label>
+                                    ))}
+                                    {groups.length === 0 && !loadingGroups && (
+                                        <p className="text-xs text-gray-500 text-center py-4">No se encontraron grupos.</p>
+                                    )}
+                                </div>
+                            </div>
+                             )}
+                        </div>
+
                         <div className="space-y-4">
                             <div className="space-y-2">
                                 <label className="text-xs font-bold text-gray-500 uppercase tracking-widest">Fecha de Envío</label>
@@ -586,18 +697,49 @@ export default function ConfigPage() {
                                 />
                             </div>
                         </div>
-                        <div className="flex gap-4 pt-2">
+                        <div className="flex gap-4 pt-4">
                             <button onClick={() => setShowScheduleModal(false)} className="flex-1 px-6 py-4 rounded-xl border border-white/10 text-gray-400 font-bold hover:bg-white/5 transition-all">Cancelar</button>
                             <button
                                 onClick={async () => {
                                     if (!scheduleDate || !scheduleTime) { alert("Por favor selecciona fecha y hora."); return; }
-                                    const newItem = { fecha: scheduleDate, hora: scheduleTime, estado: 'pendiente', mensaje: configs.prompt_publicidad_static || "", imagen: configs.publicidad_imagen || "" };
-                                    const newList = [...scheduledList, newItem];
+                                    if (campaignTarget === 'grupos' && selectedGroups.length === 0) { alert("Selecciona al menos un grupo."); return; }
+                                    
+                                    // Determinar mensaje e imagen
+                                    let mensajeFinal = configs.prompt_publicidad_static || "";
+                                    let imagenFinal = configs.publicidad_imagen || "";
+                                    
+                                    if(editIndex !== null) {
+                                       mensajeFinal = scheduledList[editIndex].mensaje;
+                                       imagenFinal = scheduledList[editIndex].imagen;
+                                    }
+
+                                    const newItem: any = { 
+                                        fecha: scheduleDate, 
+                                        hora: scheduleTime, 
+                                        estado: 'pendiente', 
+                                        mensaje: mensajeFinal, 
+                                        imagen: imagenFinal,
+                                        target: {
+                                            tipo: campaignTarget,
+                                            grupos_ids: campaignTarget === 'grupos' ? selectedGroups : []
+                                        }
+                                    };
+                                    
+                                    let newList = [...scheduledList];
+                                    if (editIndex !== null) {
+                                        newItem.estado = 'pendiente';
+                                        newItem.enviados_hoy = 0;
+                                        newItem.offset = 0;
+                                        newList[editIndex] = newItem;
+                                    } else {
+                                        newList.push(newItem);
+                                    }
+                                    
                                     await saveConfig('difusiones_programadas_json', JSON.stringify(newList));
-                                    setShowScheduleModal(false); setScheduleDate(""); setScheduleTime("");
+                                    setShowScheduleModal(false); setScheduleDate(""); setScheduleTime(""); setEditIndex(null);
                                 }}
                                 className="flex-1 px-6 py-4 rounded-xl spartan-gradient text-black font-black hover:scale-105 transition-all"
-                            >Confirmar</button>
+                            >{editIndex !== null ? 'Actualizar' : 'Confirmar'}</button>
                         </div>
                     </div>
                 </div>

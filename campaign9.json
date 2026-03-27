@@ -1,0 +1,13 @@
+{
+  "fecha": "2026-03-26",
+  "hora": "18:35",
+  "estado": "expirado (hora pasada)",
+  "mensaje": "=€ ¡Estamos EN VIVO!\nÚnete ahora a nuestro TikTok que comienza la Bailoterapia ?? ¡desde donde estés!\n=€ tiktok.com/@titanusgym/live\n¡{{Nombre}}, no te lo pierdas! >",
+  "imagen": "",
+  "target": {
+    "tipo": "grupos",
+    "grupos_ids": [
+      "593963410409-1635346669@g.us"
+    ]
+  }
+}

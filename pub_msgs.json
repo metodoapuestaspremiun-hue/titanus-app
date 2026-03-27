@@ -1,0 +1,82 @@
+[
+  {
+    "id": 189,
+    "nombre": "Grupo",
+    "telefono": "593963410409-1635346",
+    "tipo": "publicidad",
+    "estado": "error",
+    "msg_preview": "=€ ¡Estamos EN VIVO!\nÚnete ahora a nuestro TikTok q"
+  },
+  {
+    "id": 184,
+    "nombre": "Grupo",
+    "telefono": "593963410409-1635346",
+    "tipo": "publicidad",
+    "estado": "error",
+    "msg_preview": "=€ ¡Estamos EN VIVO!\nÚnete ahora a nuestro TikTok q"
+  },
+  {
+    "id": 181,
+    "nombre": "Grupo",
+    "telefono": "593963410409-1635346",
+    "tipo": "publicidad",
+    "estado": "error",
+    "msg_preview": "=€ ¡Estamos EN VIVO!\nÚnete ahora a nuestro TikTok q"
+  },
+  {
+    "id": 177,
+    "nombre": "Grupo",
+    "telefono": "593963410409-1635346",
+    "tipo": "publicidad",
+    "estado": "error",
+    "msg_preview": "=€ ¡Estamos EN VIVO!\nÚnete ahora a nuestro TikTok q"
+  },
+  {
+    "id": 161,
+    "nombre": "cesar",
+    "telefono": "593983237491",
+    "tipo": "publicidad",
+    "estado": "enviado",
+    "msg_preview": "=€ ¡Estamos EN VIVO!\nÚnete ahora a nuestro TikTok q"
+  },
+  {
+    "id": 159,
+    "nombre": "Prueba dos",
+    "telefono": "593963410409",
+    "tipo": "publicidad",
+    "estado": "enviado",
+    "msg_preview": "=€ ¡Estamos EN VIVO!\nÚnete ahora a nuestro TikTok q"
+  },
+  {
+    "id": 157,
+    "nombre": "Prueba uno",
+    "telefono": "593967491847",
+    "tipo": "publicidad",
+    "estado": "enviado",
+    "msg_preview": "=€ ¡Estamos EN VIVO!\nÚnete ahora a nuestro TikTok q"
+  },
+  {
+    "id": 147,
+    "nombre": "cesar",
+    "telefono": "593983237491",
+    "tipo": "publicidad",
+    "estado": "enviado",
+    "msg_preview": "=€ ¡Estamos EN VIVO!\nÚnete ahora a nuestro TikTok q"
+  },
+  {
+    "id": 145,
+    "nombre": "Prueba dos",
+    "telefono": "593963410409",
+    "tipo": "publicidad",
+    "estado": "enviado",
+    "msg_preview": "=€ ¡Estamos EN VIVO!\nÚnete ahora a nuestro TikTok q"
+  },
+  {
+    "id": 143,
+    "nombre": "Prueba uno",
+    "telefono": "593967491847",
+    "tipo": "publicidad",
+    "estado": "enviado",
+    "msg_preview": "=€ ¡Estamos EN VIVO!\nÚnete ahora a nuestro TikTok q"
+  }
+]

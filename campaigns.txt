@@ -1,0 +1,11 @@
+C0: estado=expirado (hora pasada) fecha=2026-03-24 hora=12:15 target=undefined
+C1: estado=completado (2 total) fecha=2026-03-24 hora=12:40 target=undefined
+C2: estado=completado (2 total) fecha=2026-03-24 hora=13:00 target=undefined
+C3: estado=completado (2 total) fecha=2026-03-24 hora=19:15 target=undefined
+C4: estado=completado (2 total) fecha=2026-03-24 hora=19:40 target=undefined
+C5: estado=pendiente fecha=2026-12-26 hora=16:17 target=undefined
+C6: estado=en_progreso fecha=2026-03-26 hora=16:16 target=undefined
+C7: estado=completado (3 total) fecha=2026-03-26 hora=16:30 target=undefined
+C8: estado=completado (3 total) fecha=2026-03-26 hora=17:55 target={"tipo":"grupos","grupos_ids":["593963410409-1635346669@g.us"]}
+C9: estado=expirado (hora pasada) fecha=2026-03-26 hora=18:35 target={"tipo":"grupos","grupos_ids":["593963410409-1635346669@g.us"]}
+C10: estado=completado (1 total) fecha=2026-03-26 hora=19:15 target={"tipo":"grupos","grupos_ids":["593963410409-1635346669@g.us"]}

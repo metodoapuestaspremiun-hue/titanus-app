@@ -26,9 +26,11 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+    let clave = "N/A";
     try {
         const body = await request.json();
-        let { clave, valor } = body;
+        let { valor } = body;
+        clave = body.clave;
 
         if (!clave || typeof clave !== 'string') return NextResponse.json({ error: "Clave inválida" }, { status: 400 });
         clave = clave.replace(/[^a-zA-Z0-9_]/g, '');
@@ -49,7 +51,11 @@ export async function POST(request: Request) {
 
         return NextResponse.json({ success: true });
     } catch (error: any) {
-        console.error("CONFIG POST ERROR:", error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        console.error("--- CONFIG POST ERROR ---");
+        console.error("Clave:", clave);
+        console.error("Error Message:", error.message);
+        if (error.code) console.error("Error Code:", error.code);
+        if (error.sqlState) console.error("SQL State:", error.sqlState);
+        return NextResponse.json({ error: error.message, code: error.code }, { status: 500 });
     }
 }
