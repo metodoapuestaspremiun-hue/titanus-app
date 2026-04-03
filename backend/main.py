@@ -7,6 +7,7 @@ import logging
 import traceback
 from datetime import datetime, timedelta
 import pytz
+import threading
 from dotenv import load_dotenv
 import pymysql
 import pymysql.cursors
@@ -307,6 +308,7 @@ def send_wa(num, text):
     if "@" in num: clean = num
     else: clean = "".join(filter(str.isdigit, num))
     
+    # Manejo exclusivo para Medios (Fotos/Videos)
     if "[MEDIA:" in text:
         try:
             parts = text.split("]", 1)
@@ -325,17 +327,26 @@ def send_wa(num, text):
                     "caption": caption_part, 
                     "delay": 1200
                 }
-                r = requests.post(url, json=payload, headers=headers, timeout=30)
-                if r.status_code in [200, 201]: return True, r.text
-        except: pass
+                # Damos mas tiempo de espera (60s) para que la API descargue la imagen.
+                r = requests.post(url, json=payload, headers=headers, timeout=60)
+                if r.status_code in [200, 201]: 
+                    return True, r.text
+                else: 
+                    return False, f"Media API Error: {r.text}"
+        except Exception as e:
+            # Si ocurre timeout o error de socket, NO ENVIAR EL MENSAJE COMO TEXTO para evitar el bug '[MEDIA:...'
+            logging.error(f"Media timeout/error: {e}")
+            return False, f"Media Exception: {e}"
 
+    # Envio de Texto simple
     url = f"{EVOLUTION_API_URL}/message/sendText/{EVOLUTION_INSTANCE_NAME}"
     headers = {"apikey": EVOLUTION_API_KEY, "Content-Type": "application/json"}
     payload = {"number": clean, "text": text, "delay": 1200}
     try:
         r = requests.post(url, json=payload, headers=headers, timeout=30)
         return r.status_code in [200, 201], r.text
-    except: return False, "Err"
+    except Exception as e: 
+        return False, f"Text Exception: {e}"
 
 def process_batch(tipo=None):
     tipo_clause = "AND tipo = %s" if tipo else "AND tipo != 'log'"
@@ -343,6 +354,8 @@ def process_batch(tipo=None):
     pend = mysql_query(query, (tipo,) if tipo else ()) or []
     count = 0
     for m in pend:
+        # Prevenir procesamiento concurrente de esta misma fila (Bloqueo)
+        mysql_query("UPDATE cola_mensajes SET estado = 'en_proceso' WHERE id = %s", (m['id'],), commit=True)
         ok, res = send_wa(m['telefono'], m['mensaje'])
         mysql_query("UPDATE cola_mensajes SET estado = %s WHERE id = %s", ("enviado" if ok else "error", m['id']), commit=True)
         count += 1
@@ -354,45 +367,49 @@ def heartbeat():
     logging.info("Heartbeat received.")
     update_heartbeat()
     
-    ec_tz = pytz.timezone('America/Guayaquil')
-    now_ec = datetime.now(ec_tz)
-    now_str = now_ec.strftime("%H:%M")
+    def background_tasks():
+        try:
+            ec_tz = pytz.timezone('America/Guayaquil')
+            now_ec = datetime.now(ec_tz)
+            now_str = now_ec.strftime("%H:%M")
+            
+            conf = get_config_map()
+            target = conf.get("envio_hora", "08:00").strip()
+            
+            # 1. Process Campaigns
+            check_scheduled_broadcasts()
+            
+            # 2. Process Birthdays
+            try:
+                target_h, target_m = map(int, target.split(':'))
+                target_total = target_h * 60 + target_m
+                now_total = now_ec.hour * 60 + now_ec.minute
+                diff = now_total - target_total
+                is_target_time = 0 <= diff < 1
+            except: is_target_time = now_str == target
+            
+            current_minute_key = now_ec.strftime("%Y-%m-%d %H:%M")
+            already_run = mysql_query(
+                "SELECT COUNT(*) as c FROM cola_mensajes WHERE tipo = 'cumpleaños' AND DATE_FORMAT(CONVERT_TZ(fecha_creacion, '+00:00', '-05:00'), '%%Y-%%m-%%d %%H:%%i') = %s",
+                (current_minute_key,)
+            )
+            already_count = already_run[0]['c'] if already_run else 0
+            
+            if is_target_time and already_count == 0:
+                generate_queue('cumpleaños')
+            
+            # 3. Process Batch
+            for t in ["cumpleaños", "vencimiento", "seguimiento", "publicidad"]: 
+                process_batch(tipo=t)
+                
+            logging.info("Background tasks completed successfully.")
+        except Exception as e:
+            logging.error(f"Error en hilo en segundo plano: {e}")
+
+    # Start thread immediately so Response is returned under 100ms
+    threading.Thread(target=background_tasks).start()
     
-    conf = get_config_map()
-    target = conf.get("envio_hora", "08:00").strip()
-    
-    report = {"time": now_str, "actions": []}
-    
-    # 1. Process Campaigns
-    check_scheduled_broadcasts()
-    report["actions"].append("Checked scheduled broadcasts")
-    
-    # 2. Process Birthdays
-    try:
-        target_h, target_m = map(int, target.split(':'))
-        target_total = target_h * 60 + target_m
-        now_total = now_ec.hour * 60 + now_ec.minute
-        diff = now_total - target_total
-        is_target_time = 0 <= diff < 1
-    except: is_target_time = now_str == target
-    
-    current_minute_key = now_ec.strftime("%Y-%m-%d %H:%M")
-    already_run = mysql_query(
-        "SELECT COUNT(*) as c FROM cola_mensajes WHERE tipo = 'cumpleaños' AND DATE_FORMAT(CONVERT_TZ(fecha_creacion, '+00:00', '-05:00'), '%%Y-%%m-%%d %%H:%%i') = %s",
-        (current_minute_key,)
-    )
-    already_count = already_run[0]['c'] if already_run else 0
-    
-    if is_target_time and already_count == 0:
-        c = generate_queue('cumpleaños')
-        report["actions"].append(f"Generated {c} birthday messages")
-    
-    # 3. Process Batch
-    for t in ["cumpleaños", "vencimiento", "seguimiento", "publicidad"]: 
-        sent = process_batch(tipo=t)
-        if sent > 0: report["actions"].append(f"Processed {sent} {t} queries")
-    
-    return jsonify(report), 200
+    return jsonify({"status": "processing_in_background"}), 200
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
