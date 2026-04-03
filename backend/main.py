@@ -76,6 +76,41 @@ def update_heartbeat():
         ("bot_heartbeat",), commit=True
     )
 
+# --- LOCKING & RECOVERY (BLINDAJE) ---
+def acquire_lock():
+    """Implementa un cerrojo global para evitar hilos duplicados."""
+    # Intentamos reclamar el lock si no existe o si expiró (10 min)
+    now = datetime.now()
+    res = mysql_query("SELECT valor FROM configuracion WHERE clave = 'bot_running_lock'")
+    if res:
+        try:
+            lock_time = datetime.strptime(res[0]['valor'], "%Y-%m-%d %H:%M:%S")
+            if (now - lock_time).total_seconds() < 600: # 10 min de gracia
+                return False # Lock ocupado y joven
+        except: pass
+    
+    # Reclamar Lock: Grabamos la hora actual
+    mysql_query(
+        "INSERT INTO configuracion (clave, valor) VALUES (%s, %s) ON DUPLICATE KEY UPDATE valor = %s",
+        ("bot_running_lock", now.strftime("%Y-%m-%d %H:%M:%S"), now.strftime("%Y-%m-%d %H:%M:%S")),
+        commit=True
+    )
+    return True
+
+def release_lock():
+    """Libera el cerrojo al terminar."""
+    mysql_query("DELETE FROM configuracion WHERE clave = 'bot_running_lock'", commit=True)
+
+def cleanup_stuck_messages():
+    """Rescata mensajes que quedaron 'en_proceso' por mas de 15 min."""
+    # Si un mensaje está en_proceso y pasaron 15 min de su creación, lo regresamos a pendiente
+    res = mysql_query(
+        "UPDATE cola_mensajes SET estado = 'pendiente' WHERE estado = 'en_proceso' AND fecha_creacion < NOW() - INTERVAL 15 MINUTE",
+        commit=True
+    )
+    if res and res > 0:
+        logging.info(f"RECUPERACIÓN: {res} mensajes rescatados del limbo.")
+
 # --- AI HELPERS ---
 def call_openai_ai(prompt_sistema, client_name, api_key, model="gpt-3.5-turbo"):
     if not api_key or not prompt_sistema: return None
@@ -350,15 +385,29 @@ def send_wa(num, text):
 
 def process_batch(tipo=None):
     tipo_clause = "AND tipo = %s" if tipo else "AND tipo != 'log'"
+    # Solo seleccionamos los pendientes
     query = f"SELECT * FROM cola_mensajes WHERE estado = 'pendiente' {tipo_clause} ORDER BY id ASC LIMIT {BATCH_SIZE}"
     pend = mysql_query(query, (tipo,) if tipo else ()) or []
     count = 0
     for m in pend:
-        # Prevenir procesamiento concurrente de esta misma fila (Bloqueo)
-        mysql_query("UPDATE cola_mensajes SET estado = 'en_proceso' WHERE id = %s", (m['id'],), commit=True)
-        ok, res = send_wa(m['telefono'], m['mensaje'])
-        mysql_query("UPDATE cola_mensajes SET estado = %s WHERE id = %s", ("enviado" if ok else "error", m['id']), commit=True)
-        count += 1
+        # --- BLINDAJE ATÓMICO ---
+        # Intentamos 'reclamar' el mensaje. Solo lo procesamos si logramos cambiarlo de pendiente -> en_proceso
+        # Si otro hilo ya lo reclamó, affected_rows será 0 y saltamos.
+        claimed = mysql_query(
+            "UPDATE cola_mensajes SET estado = 'en_proceso' WHERE id = %s AND estado = 'pendiente'",
+            (m['id'],), commit=True
+        )
+        
+        if claimed and claimed > 0:
+            logging.info(f"CLAIMED: Mensaje ID {m['id']} para {m['nombre']}")
+            ok, res = send_wa(m['telefono'], m['mensaje'])
+            mysql_query("UPDATE cola_mensajes SET estado = %s WHERE id = %s", ("enviado" if ok else "error", m['id']), commit=True)
+            count += 1
+            if count < len(pend):
+                time.sleep(DELAY_BETWEEN_MESSAGES)
+        else:
+            logging.warning(f"SKIP: Mensaje ID {m['id']} ya está siendo procesado por otro hilo.")
+            
     return count
 
 # --- FLASK ROUTES ---
