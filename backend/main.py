@@ -417,7 +417,15 @@ def heartbeat():
     update_heartbeat()
     
     def background_tasks():
+        # --- SINGLETON LOCK ---
+        if not acquire_lock():
+            logging.warning("ABORT: Bot ya está trabajando en otro hilo. Ignorando heartbeat paralelo.")
+            return
+
         try:
+            # --- AUTO RECOVERY ---
+            cleanup_stuck_messages()
+
             ec_tz = pytz.timezone('America/Guayaquil')
             now_ec = datetime.now(ec_tz)
             now_str = now_ec.strftime("%H:%M")
@@ -433,19 +441,19 @@ def heartbeat():
                 target_h, target_m = map(int, target.split(':'))
                 target_total = target_h * 60 + target_m
                 now_total = now_ec.hour * 60 + now_ec.minute
-                diff = now_total - target_total
-                is_target_time = 0 <= diff < 1
-            except: is_target_time = now_str == target
+                # Disparar solo en el minuto exacto
+                is_target_time = (now_total == target_total)
+            except: is_target_time = (now_str == target)
             
-            current_minute_key = now_ec.strftime("%Y-%m-%d %H:%M")
-            already_run = mysql_query(
-                "SELECT COUNT(*) as c FROM cola_mensajes WHERE tipo = 'cumpleaños' AND DATE_FORMAT(CONVERT_TZ(fecha_creacion, '+00:00', '-05:00'), '%%Y-%%m-%%d %%H:%%i') = %s",
-                (current_minute_key,)
-            )
-            already_count = already_run[0]['c'] if already_run else 0
-            
-            if is_target_time and already_count == 0:
-                generate_queue('cumpleaños')
+            if is_target_time:
+                # Verificar duplicados del mismo minuto
+                current_minute_key = now_ec.strftime("%Y-%m-%d %H:%M")
+                already_run = mysql_query(
+                    "SELECT COUNT(*) as c FROM cola_mensajes WHERE tipo = 'cumpleaños' AND DATE_FORMAT(CONVERT_TZ(fecha_creacion, '+00:00', '-05:00'), '%%Y-%%m-%%d %%H:%%i') = %s",
+                    (current_minute_key,)
+                )
+                if not already_run or already_run[0]['c'] == 0:
+                    generate_queue('cumpleaños')
             
             # 3. Process Batch
             for t in ["cumpleaños", "vencimiento", "seguimiento", "publicidad"]: 
@@ -454,8 +462,12 @@ def heartbeat():
             logging.info("Background tasks completed successfully.")
         except Exception as e:
             logging.error(f"Error en hilo en segundo plano: {e}")
+            traceback.print_exc()
+        finally:
+            # SIEMPRE liberar el lock al terminar (éxito o error)
+            release_lock()
 
-    # Start thread immediately so Response is returned under 100ms
+    # Start thread immediately
     threading.Thread(target=background_tasks).start()
     
     return jsonify({"status": "processing_in_background"}), 200
