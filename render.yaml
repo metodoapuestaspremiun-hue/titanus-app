@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: titanus-bot
+    env: python
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: gunicorn --bind 0.0.0.0:$PORT backend.main:app
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.10.0
+      - key: PORT
+        value: 10000
