@@ -7,7 +7,6 @@ import {
     LayoutDashboard,
     Settings,
     LogOut,
-    Dumbbell,
     Terminal,
     Upload
 } from "lucide-react";
@@ -19,10 +18,10 @@ function cn(...inputs: ClassValue[]) {
 }
 
 const navItems = [
-    { name: "Dashboard", href: "/", icon: LayoutDashboard },
+    { name: "Dashboard Bot", href: "/", icon: LayoutDashboard },
     { name: "Cargar Clientes", href: "/cargar-clientes", icon: Upload },
     { name: "Clientes", href: "/clientes", icon: Users },
-    { name: "Configuración", href: "/configuracion", icon: Settings },
+    { name: "Configuración Bot", href: "/configuracion", icon: Settings },
     { name: "Logs", href: "/logs", icon: Terminal },
 ];
 
@@ -31,39 +30,35 @@ export default function Sidebar() {
     const router = useRouter();
 
     const handleLogout = () => {
-        // Borrar cookie de sesión
         document.cookie = "titanus_session=; path=/; max-age=0; SameSite=Strict";
-        // Redirigir a login
         router.push("/login");
     };
 
     return (
-        <div className="flex flex-col h-screen w-64 bg-spartan-black border-r border-white/10 text-white">
-            <Link href="/" className="p-6 flex items-center gap-3 hover:opacity-80 transition-opacity">
-                <div className="bg-spartan-yellow p-2 rounded-lg">
-                    <Dumbbell className="text-black h-6 w-6" />
-                </div>
-                <span className="font-bold text-xl tracking-tight">TITANUS</span>
-            </Link>
+        <aside className="flex flex-col h-[calc(100vh-4rem)] w-64 bg-black border-r border-white/10 text-white select-none">
+            <div className="px-6 py-4">
+                <span className="text-[11px] font-bold tracking-widest uppercase text-zinc-500">
+                    Navegación Mensajería
+                </span>
+            </div>
 
-            <nav className="flex-1 px-4 space-y-2 mt-4">
+            <nav className="flex-1 px-4 space-y-1.5">
                 {navItems.map((item) => {
+                    const Icon = item.icon;
                     const isActive = pathname === item.href;
+                    
                     return (
                         <Link
                             key={item.name}
                             href={item.href}
                             className={cn(
-                                "flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 group",
+                                "flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all",
                                 isActive
-                                    ? "bg-spartan-yellow text-black font-semibold shadow-[0_0_15px_rgba(252,221,9,0.3)]"
-                                    : "text-gray-400 hover:bg-white/5 hover:text-white"
+                                    ? "bg-[#FCDD09] text-black shadow-md shadow-[#FCDD09]/15"
+                                    : "text-zinc-400 hover:text-white hover:bg-zinc-900"
                             )}
                         >
-                            <item.icon className={cn(
-                                "h-5 w-5",
-                                isActive ? "text-black" : "text-gray-400 group-hover:text-spartan-yellow"
-                            )} />
+                            <Icon className={cn("h-5 w-5", isActive ? "text-black" : "text-[#FCDD09]")} />
                             {item.name}
                         </Link>
                     );
@@ -73,12 +68,12 @@ export default function Sidebar() {
             <div className="p-4 border-t border-white/10">
                 <button
                     onClick={handleLogout}
-                    className="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-400 hover:bg-red-500/10 hover:text-red-500 w-full transition-all"
+                    className="flex items-center gap-3 px-4 py-3 w-full rounded-xl text-sm font-medium text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors"
                 >
                     <LogOut className="h-5 w-5" />
                     Cerrar Sesión
                 </button>
             </div>
-        </div>
+        </aside>
     );
 }

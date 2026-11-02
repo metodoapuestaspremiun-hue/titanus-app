@@ -1,0 +1,175 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Tenant {
+  id                      String         @id @default(uuid())
+  name                    String
+  slug                    String         @unique
+  referralCommPct         Decimal        @default(10.00) @db.Decimal(5, 2)
+  storeReferralCommPct    Decimal        @default(5.00) @db.Decimal(5, 2)
+  currency                String         @default("USD")
+  whatsappPhone           String?
+  googleReviewUrl         String?        // Enlace de Google Maps Reviews
+  inactivityThresholdDays Int            @default(14)
+  isActive                Boolean        @default(true)
+  showOverviewTab         Boolean        @default(true)
+  showEvaluationsTab      Boolean        @default(true)
+  showWalletTab           Boolean        @default(true)
+  showConfigTab           Boolean        @default(true)
+  createdAt               DateTime       @default(now())
+  updatedAt               DateTime       @updatedAt
+
+  wallets                 Wallet[]
+  customers               Customer[]
+  staff                   Staff[]
+  evaluations             Evaluation[]
+  payments                Payment[]
+  qrTokens                QrToken[]
+  membershipPlans         MembershipPlan[]
+  walletTransactions      WalletTransaction[]
+}
+
+model Staff {
+  id           String        @id @default(uuid())
+  tenantId     String
+  name         String
+  email        String        @unique
+  passwordHash String
+  role         String        @default("OWNER") // OWNER | TRAINER | MANAGER
+  avatarUrl    String?
+  isActive     Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  evaluations  Evaluation[]
+
+  @@index([tenantId])
+}
+
+model Customer {
+  id               String       @id @default(uuid())
+  tenantId         String
+  name             String
+  phone            String       // WhatsApp del socio
+  membershipActive Boolean      @default(false)
+  membershipExpiry DateTime?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  tenant           Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  wallets          Wallet[]
+  evaluations      Evaluation[]
+  payments         Payment[]
+
+  @@unique([tenantId, phone])
+  @@index([tenantId])
+}
+
+model Wallet {
+  id           String              @id @default(uuid())
+  tenantId     String
+  customerId   String              @unique
+  balance      Decimal             @default(0.00) @db.Decimal(10, 2)
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  customer     Customer            @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  tenant       Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  transactions WalletTransaction[]
+
+  @@index([tenantId])
+}
+
+model WalletTransaction {
+  id          String   @id @default(uuid())
+  tenantId    String
+  walletId    String
+  type        String   // CASHBACK_EARNED | REDEEMED | ADJUSTMENT
+  amount      Decimal  @db.Decimal(10, 2)
+  description String?
+  referenceId String?  // ID de Payment si aplica
+  createdAt   DateTime @default(now())
+
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  wallet      Wallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([walletId])
+}
+
+model Payment {
+  id          String    @id @default(uuid())
+  tenantId    String
+  customerId  String
+  type        String    // MEMBERSHIP | RETAIL
+  amount      Decimal   @db.Decimal(10, 2)
+  cashbackPct Decimal   @db.Decimal(5, 2)
+  cashbackAmt Decimal   @db.Decimal(10, 2)
+  status      String    @default("PENDING") // PENDING | APPROVED | REJECTED
+  approvedAt  DateTime?
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer    Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([customerId])
+}
+
+model Evaluation {
+  id          String   @id @default(uuid())
+  tenantId    String
+  customerId  String
+  staffId     String   // Coach calificado
+  stars       Int      // 1 a 5
+  comment     String?  // Feedback interno en caso de 1-4 estrellas
+  createdAt   DateTime @default(now())
+
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer    Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  staff       Staff    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([customerId])
+  @@index([staffId])
+}
+
+model QrToken {
+  id        String   @id @default(uuid())
+  tenantId  String
+  type      String   // EVALUATION | MEMBERSHIP | RETAIL
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+}
+
+model MembershipPlan {
+  id        String   @id @default(uuid())
+  tenantId  String
+  name      String   // e.g. "Mes Completo", "Trimestre", "Pase Diario"
+  price     Decimal  @db.Decimal(10, 2)
+  durationDays Int   @default(30)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+}
