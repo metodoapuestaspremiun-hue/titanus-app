@@ -386,32 +386,6 @@ export default function ClubConfig() {
                 </p>
               </div>
             )}
-
-            {/* Registro de Webhook */}
-            <div className="border-t border-white/10 pt-4 space-y-3">
-              <div className="flex items-center gap-2">
-                <Link2 className="w-4 h-4 text-[#FCDD09]" />
-                <span className="text-sm font-bold text-white">Webhook de Fidelización</span>
-              </div>
-              <div className="p-3 bg-zinc-900 rounded-xl border border-white/5">
-                <code className="text-[11px] text-[#FCDD09] font-mono select-all block break-all">
-                  {typeof window !== 'undefined' ? window.location.origin : ''}/api/club/webhook/whatsapp
-                </code>
-              </div>
-              <button
-                onClick={registerWebhook}
-                disabled={registeringWebhook}
-                className="w-full py-2.5 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white font-bold text-xs flex items-center justify-center gap-2 border border-white/10 transition-all disabled:opacity-50"
-              >
-                <Terminal className="w-4 h-4 text-[#FCDD09]" />
-                {registeringWebhook ? 'Registrando...' : 'Registrar Webhook en Evolution API'}
-              </button>
-              {webhookMsg && (
-                <p className="text-xs text-zinc-300 bg-zinc-900 p-3 rounded-xl border border-white/10 break-all">
-                  {webhookMsg}
-                </p>
-              )}
-            </div>
           </div>
         </div>
       </div>
