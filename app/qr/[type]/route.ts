@@ -50,9 +50,38 @@ export async function GET(
       },
     })
 
-    // 3. Redirigir instantáneamente al WhatsApp del gimnasio con el código dinámico
-    const whatsappPhone = tenant.whatsappPhone || '593987654321'
-    const waUrl = `https://wa.me/${whatsappPhone}?text=${encodeURIComponent(token)}`
+    // 3. Obtener el número real de WhatsApp configurado o consultarlo en vivo a Evolution API
+    let whatsappPhone = tenant.whatsappPhone
+
+    if (!whatsappPhone) {
+      try {
+        const evoUrl = process.env.EVOLUTION_API_URL || 'http://178.238.238.158:8080'
+        const evoKey = process.env.EVOLUTION_API_KEY || '42a447c1-3d74-4b52-9571-042c174f7621'
+        const evoInst = process.env.EVOLUTION_INSTANCE_NAME || 'gym_bot'
+
+        const evoRes = await fetch(`${evoUrl}/instance/fetchInstances`, {
+          headers: { apikey: evoKey },
+        })
+        const instances = await evoRes.json()
+        const target = Array.isArray(instances)
+          ? instances.find((i: any) => i.name === evoInst)
+          : instances?.value?.find((i: any) => i.name === evoInst)
+
+        if (target && target.ownerJid) {
+          whatsappPhone = target.ownerJid.split('@')[0].replace(/[^0-9]/g, '')
+          // Guardar en base de datos para no tener que consultarlo cada vez
+          await prisma.tenant.update({
+            where: { id: tenant.id },
+            data: { whatsappPhone },
+          })
+        }
+      } catch (err) {
+        console.error('No se pudo obtener el número de Evolution API automáticamente:', err)
+      }
+    }
+
+    const finalPhone = whatsappPhone || '593987654321'
+    const waUrl = `https://wa.me/${finalPhone}?text=${encodeURIComponent(token)}`
 
     return NextResponse.redirect(waUrl, 302)
   } catch (error) {
