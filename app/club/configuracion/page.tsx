@@ -4,7 +4,6 @@ import React, { useState, useEffect } from 'react'
 import {
   Settings,
   Sliders,
-  RefreshCw,
   Smartphone,
   CheckCircle,
   XCircle,
@@ -12,10 +11,12 @@ import {
   Plus,
   Trash2,
   Users,
-  Link2,
-  Terminal
+  QrCode,
+  Download,
+  Printer
 } from 'lucide-react'
 import axios from 'axios'
+import { QRCodeSVG } from 'qrcode.react'
 
 export default function ClubConfig() {
   const [membershipCashback, setMembershipCashback] = useState(10)
@@ -25,17 +26,24 @@ export default function ClubConfig() {
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
 
-  // Estado de conexión WhatsApp (Evolution API real)
+  // Estado de conexión WhatsApp
   const [wsStatus, setWsStatus] = useState<'connected' | 'disconnected' | 'loading'>('loading')
   const [qrCode, setQrCode] = useState<string | null>(null)
   const [loadingQr, setLoadingQr] = useState(false)
-  const [webhookMsg, setWebhookMsg] = useState('')
-  const [registeringWebhook, setRegisteringWebhook] = useState(false)
 
-  // Gestión de Entrenadores reales
+  // Gestión de Entrenadores
   const [coaches, setCoaches] = useState<any[]>([])
   const [newCoachName, setNewCoachName] = useState('')
   const [addingCoach, setAddingCoach] = useState(false)
+
+  // Dominio base de la app para los QR impresos
+  const [baseUrl, setBaseUrl] = useState('https://titanus-app.vercel.app')
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setBaseUrl(window.location.origin)
+    }
+  }, [])
 
   const checkWhatsAppStatus = async () => {
     try {
@@ -43,26 +51,6 @@ export default function ClubConfig() {
       setWsStatus(res.data.connected || res.data.status === 'open' ? 'connected' : 'disconnected')
     } catch (e) {
       setWsStatus('disconnected')
-    }
-  }
-
-  const registerWebhook = async () => {
-    try {
-      setRegisteringWebhook(true)
-      setWebhookMsg('')
-      const domain = window.location.origin
-      const res = await axios.post('/api/club/setup-webhook', {
-        webhookUrl: `${domain}/api/club/webhook/whatsapp`,
-      })
-      if (res.data.success) {
-        setWebhookMsg(`✅ Webhook registrado correctamente: ${res.data.webhookUrl}`)
-      } else {
-        setWebhookMsg(`⚠️ Respuesta de Evolution: ${JSON.stringify(res.data.evolutionResponse)}`)
-      }
-    } catch (e: any) {
-      setWebhookMsg(`❌ Error: ${e.response?.data?.error || e.message}`)
-    } finally {
-      setRegisteringWebhook(false)
     }
   }
 
@@ -155,7 +143,7 @@ export default function ClubConfig() {
   }
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-8">
+    <div className="p-8 max-w-7xl mx-auto space-y-10">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-black tracking-tight text-white flex items-center gap-2">
@@ -163,7 +151,7 @@ export default function ClubConfig() {
             <Settings className="w-7 h-7 text-[#FCDD09]" />
           </h1>
           <p className="text-sm text-zinc-400 mt-1">
-            Control de comisiones de monedero, vinculación WhatsApp y gestión de entrenadores.
+            Control de comisiones de monedero, vinculación WhatsApp y descarga de QR fijos para imprimir.
           </p>
         </div>
 
@@ -182,6 +170,99 @@ export default function ClubConfig() {
           {message}
         </div>
       )}
+
+      {/* SECCIÓN NUEVA: CÓDIGOS QR FÍSICOS ESTÁTICOS PARA IMPRIMIR (CON BACKEND ROTATIVO) */}
+      <div className="p-8 rounded-3xl bg-zinc-950 border border-[#FCDD09]/30 space-y-6">
+        <div className="border-b border-white/10 pb-4">
+          <div className="flex items-center gap-2">
+            <Printer className="w-6 h-6 text-[#FCDD09]" />
+            <h2 className="text-xl font-black text-white">Carteles QR Físicos para Imprimir</h2>
+          </div>
+          <p className="text-xs text-zinc-400 mt-1">
+            Imprime estos carteles y pégalos en tu gimnasio. El dibujo del QR es permanente, pero cada escaneo genera un código criptográfico rotativo de un solo uso en el backend.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Cartel 1: Mensualidad */}
+          <div className="p-6 rounded-2xl bg-zinc-900/60 border border-white/10 flex flex-col items-center text-center space-y-4">
+            <span className="text-xs font-black uppercase tracking-wider text-[#FCDD09]">
+              Cartel Mostrador
+            </span>
+            <h3 className="font-bold text-white text-base">Pago de Mensualidad</h3>
+
+            <div className="p-3 bg-white rounded-2xl border-4 border-[#FCDD09] shadow-lg">
+              <QRCodeSVG
+                value={`${baseUrl}/qr/m`}
+                size={160}
+                level="H"
+                includeMargin={true}
+              />
+            </div>
+
+            <div className="space-y-1">
+              <span className="text-[11px] font-mono text-zinc-400 block truncate max-w-[200px]">
+                {baseUrl}/qr/m
+              </span>
+              <span className="text-[11px] text-[#FCDD09] font-bold block">
+                🔒 Requiere aprobación en caja
+              </span>
+            </div>
+          </div>
+
+          {/* Cartel 2: Tienda / Barra */}
+          <div className="p-6 rounded-2xl bg-zinc-900/60 border border-white/10 flex flex-col items-center text-center space-y-4">
+            <span className="text-xs font-black uppercase tracking-wider text-[#FCDD09]">
+              Cartel Barra / Suplementos
+            </span>
+            <h3 className="font-bold text-white text-base">Consumo en Barra</h3>
+
+            <div className="p-3 bg-white rounded-2xl border-4 border-[#FCDD09] shadow-lg">
+              <QRCodeSVG
+                value={`${baseUrl}/qr/t`}
+                size={160}
+                level="H"
+                includeMargin={true}
+              />
+            </div>
+
+            <div className="space-y-1">
+              <span className="text-[11px] font-mono text-zinc-400 block truncate max-w-[200px]">
+                {baseUrl}/qr/t
+              </span>
+              <span className="text-[11px] text-[#FCDD09] font-bold block">
+                🔒 Requiere aprobación en caja
+              </span>
+            </div>
+          </div>
+
+          {/* Cartel 3: Calificar Coaches */}
+          <div className="p-6 rounded-2xl bg-zinc-900/60 border border-white/10 flex flex-col items-center text-center space-y-4">
+            <span className="text-xs font-black uppercase tracking-wider text-emerald-400">
+              Cartel Sala de Máquinas
+            </span>
+            <h3 className="font-bold text-white text-base">Calificar Coach</h3>
+
+            <div className="p-3 bg-white rounded-2xl border-4 border-emerald-400 shadow-lg">
+              <QRCodeSVG
+                value={`${baseUrl}/qr/c`}
+                size={160}
+                level="H"
+                includeMargin={true}
+              />
+            </div>
+
+            <div className="space-y-1">
+              <span className="text-[11px] font-mono text-zinc-400 block truncate max-w-[200px]">
+                {baseUrl}/qr/c
+              </span>
+              <span className="text-[11px] text-emerald-400 font-bold block">
+                ⚡ 100% Autónomo (Sin caja)
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Columna Izquierda: Sliders de Comisiones y Ajustes */}
@@ -265,7 +346,6 @@ export default function ClubConfig() {
               <span className="text-xs text-zinc-500">{coaches.length} registrados</span>
             </div>
 
-            {/* Formulario para agregar */}
             <form onSubmit={handleAddCoach} className="flex gap-2">
               <input
                 type="text"
@@ -284,7 +364,6 @@ export default function ClubConfig() {
               </button>
             </form>
 
-            {/* Lista de Coaches */}
             <div className="divide-y divide-white/10 max-h-56 overflow-y-auto">
               {coaches.map((c) => (
                 <div key={c.id} className="py-2.5 flex items-center justify-between">
@@ -304,7 +383,7 @@ export default function ClubConfig() {
           </div>
         </div>
 
-        {/* Columna Derecha: Conector WhatsApp Evolution API con Escaneo QR Real */}
+        {/* Columna Derecha: Conector WhatsApp Evolution API */}
         <div className="space-y-6">
           <div className="p-8 rounded-3xl bg-zinc-950 border border-white/10 space-y-6">
             <div className="flex items-center justify-between">
@@ -339,7 +418,6 @@ export default function ClubConfig() {
               </div>
             </div>
 
-            {/* Panel de Conexión / QR */}
             {wsStatus !== 'connected' && (
               <div className="space-y-4">
                 {!qrCode ? (

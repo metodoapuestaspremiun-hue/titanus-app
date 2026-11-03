@@ -17,7 +17,6 @@ export async function POST(req: Request) {
     }
 
     const remoteJid = message.key?.remoteJid || ''
-    // Ignorar mensajes de grupos
     if (remoteJid.includes('@g.us')) {
       return NextResponse.json({ status: 'ignored_group' })
     }
@@ -33,7 +32,7 @@ export async function POST(req: Request) {
     const tenant = await prisma.tenant.findUnique({ where: { slug: 'titanus-gym' } })
     if (!tenant) return NextResponse.json({ error: 'Tenant no configurado' }, { status: 400 })
 
-    // Obtener o registrar cliente de fidelización con su número y nombre de WhatsApp
+    // Obtener o registrar cliente de fidelización
     let customer = await prisma.customer.findFirst({
       where: { tenantId: tenant.id, phone },
       include: { wallets: true },
@@ -51,7 +50,6 @@ export async function POST(req: Request) {
         include: { wallets: true },
       })
     } else if (customer.name === 'Socio Titanus' && message.pushName) {
-      // Actualizar nombre si antes era genérico
       await prisma.customer.update({
         where: { id: customer.id },
         data: { name: message.pushName },
@@ -61,7 +59,7 @@ export async function POST(req: Request) {
     const currentBalance = customer.wallets?.[0] ? Number(customer.wallets[0].balance) : 0
 
     // -------------------------------------------------------------
-    // CONSULTA RÁPIDA DE MONEDERO: /saldo, saldo, billetera, wallet, etc.
+    // CONSULTA AUTÓNOMA DE SALDO: /saldo, saldo, billetera, etc. (SIN APROBACIÓN)
     // -------------------------------------------------------------
     const isBalanceQuery = [
       '/saldo', 'saldo', 'mi saldo', 'cuanto tengo', 'cuanto tengo en mi wallet',
@@ -69,15 +67,16 @@ export async function POST(req: Request) {
     ].includes(lowerText)
 
     if (isBalanceQuery) {
-      const msg = `💰 *TU BILLETERA DIGITAL - TITANUS GYM*\n\nHola *${customer.name}*!\n\n💵 Saldo disponible: *$${currentBalance.toFixed(2)} USD*\n\n🔥 Puedes canjear hasta el *100%* de este saldo en tu próxima mensualidad, batidos o suplementos en recepción.\n\n_Para pagar o calificar, escanea los códigos QR en mostrador._`
+      const msg = `💰 *TU BILLETERA DIGITAL - TITANUS GYM*\n\nHola *${customer.name}*!\n\n💵 Saldo disponible: *$${currentBalance.toFixed(2)} USD*\n\n🔥 Puedes canjear hasta el *100%* de este saldo en tu próxima mensualidad, batidos o suplementos en recepción.\n\n_Para canjear, solicítalo al staff en el mostrador._`
       await sendWhatsAppMessage(phone, msg)
       return NextResponse.json({ status: 'balance_sent', balance: currentBalance })
     }
 
     // -------------------------------------------------------------
-    // GESTIÓN DE SESIONES CONVERSACIONALES ACTIVAS
+    // SESIONES INTERACTIVAS EN CURSO
     // -------------------------------------------------------------
-    // 1. Sesión activa: Selección de Coach para calificar
+
+    // A) Flujo 1: Calificación de Coaches - Selección de Coach
     const pendingCoachSelection = await prisma.qrToken.findFirst({
       where: {
         tenantId: tenant.id,
@@ -118,7 +117,7 @@ export async function POST(req: Request) {
       }
     }
 
-    // 2. Sesión activa: Calificación de estrellas (1 al 5)
+    // B) Flujo 1: Calificación de Coaches - Envío de Estrellas (100% AUTÓNOMO, SIN APROBACIÓN)
     const pendingStars = await prisma.qrToken.findFirst({
       where: {
         tenantId: tenant.id,
@@ -156,13 +155,13 @@ export async function POST(req: Request) {
       } else {
         await sendWhatsAppMessage(
           phone,
-          `🙏 *Gracias por tu feedback honesto, ${customer.name}.*\n\nEn Titanus queremos mejorar siempre. ¿Tienes alguna sugerencia o comentario sobre tu entrenamiento? Responde a este mensaje y la administración lo revisará.`
+          `🙏 *Gracias por tu feedback sincero, ${customer.name}.*\n\nEn Titanus queremos mejorar siempre. ¿Tienes alguna sugerencia o comentario sobre tu entrenamiento? Responde a este mensaje y la administración lo revisará.`
         )
       }
       return NextResponse.json({ status: 'evaluation_recorded', stars })
     }
 
-    // 3. Sesión activa: Selección de Plan de Mensualidad
+    // C) Flujo 2: Selección de Plan de Mensualidad -> Envía a Cola de Recepción (REQUIERE APROBACIÓN)
     const pendingPlanSelection = await prisma.qrToken.findFirst({
       where: {
         tenantId: tenant.id,
@@ -185,12 +184,11 @@ export async function POST(req: Request) {
         const cashbackPct = Number(tenant.referralCommPct)
         const cashbackAmt = parseFloat(((amount * cashbackPct) / 100).toFixed(2))
 
-        // Eliminar sesión de selección
         await prisma.qrToken.deleteMany({
           where: { tenantId: tenant.id, token: { startsWith: `PLAN_SEL_${phone}` } },
         })
 
-        // Crear la solicitud pendiente para caja en el panel
+        // Crea pago con estado PENDING para que el recepcionista dé permiso
         await prisma.payment.create({
           data: {
             tenantId: tenant.id,
@@ -206,22 +204,21 @@ export async function POST(req: Request) {
 
         await sendWhatsAppMessage(
           phone,
-          `✅ *Plan Seleccionado: ${chosenPlan.name}*\n\n💵 Monto a pagar en caja: *$${amount.toFixed(2)} USD*\n🎁 Cashback que ganarás: *+$${cashbackAmt.toFixed(2)} USD* (${cashbackPct}%)\n💰 Saldo actual en tu Monedero: *$${currentBalance.toFixed(2)} USD*\n\n🔔 *Acércate a recepción para pagar.* El staff aprobará tu pago en el monitor y se acreditará tu saldo inmediatamente.`
+          `✅ *Plan Seleccionado: ${chosenPlan.name}*\n\n💵 Monto a pagar en caja: *$${amount.toFixed(2)} USD*\n🎁 Cashback que ganarás: *+$${cashbackAmt.toFixed(2)} USD* (${cashbackPct}%)\n💰 Saldo actual en tu Monedero: *$${currentBalance.toFixed(2)} USD*\n\n🔔 *Acércate a recepción para cancelar.* Una vez que el staff apruebe tu pago en el monitor, tu saldo de cashback se acreditará automáticamente.`
         )
         return NextResponse.json({ status: 'plan_payment_queued', plan: chosenPlan.name })
       }
     }
 
-    // Si no es un comando QR, salir para no interferir con otros bots
+    // Si no es un comando de código QR, ignorar
     const isQrCommand = rawText.startsWith('EVAL-') || rawText.startsWith('MEM-') || rawText.startsWith('RET-')
     if (!isQrCommand) {
       return NextResponse.json({ status: 'not_club_command' })
     }
 
     // -------------------------------------------------------------
-    // VALIDACIÓN ANTIFRAUDE DEL TOKEN QR (EVITA REPETICIONES Y REUSO)
+    // CONSUMO ATÓMICO DEL TOKEN QR (SEGURIDAD ANTIFRAUDE)
     // -------------------------------------------------------------
-    // Buscar si el token existe y sigue vigente
     const validQr = await prisma.qrToken.findFirst({
       where: {
         tenantId: tenant.id,
@@ -230,22 +227,19 @@ export async function POST(req: Request) {
       },
     })
 
-    if (!validQr && (rawText.startsWith('MEM-') || rawText.startsWith('RET-') || rawText.startsWith('EVAL-'))) {
-      // El QR ya fue usado o expiró
+    if (!validQr) {
       await sendWhatsAppMessage(
         phone,
-        `⚠️ *Código QR no válido o expirado*\n\nEste código ya fue utilizado o ha vencido. Por favor solicita en recepción que proyecten un nuevo código en pantalla.`
+        `⚠️ *Código QR no válido o ya utilizado*\n\nEste código ya fue consumido o su tiempo de escaneo expiró. Por favor vuelve a escanear el cartel oficial en el gimnasio.`
       )
       return NextResponse.json({ status: 'qr_expired_or_invalid' })
     }
 
-    // Si el QR es válido, lo consumimos para que no se vuelva a usar
-    if (validQr) {
-      await prisma.qrToken.delete({ where: { id: validQr.id } })
-    }
+    // Quemar el token inmediatamente de la base de datos (Un solo uso)
+    await prisma.qrToken.delete({ where: { id: validQr.id } })
 
     // -------------------------------------------------------------
-    // FLUJO 1: EVALUACIÓN DE COACHES (QR: EVAL-XXXX)
+    // FLUJO 1: CALIFICAR COACH (QR: EVAL-*) -> 100% AUTÓNOMO (NO REQUIERE APROBACIÓN)
     // -------------------------------------------------------------
     if (rawText.startsWith('EVAL-')) {
       const coaches = await prisma.staff.findMany({
@@ -254,7 +248,7 @@ export async function POST(req: Request) {
       })
 
       if (coaches.length === 0) {
-        await sendWhatsAppMessage(phone, `❌ No hay entrenadores registrados aún. Consulta en recepción.`)
+        await sendWhatsAppMessage(phone, `❌ No hay entrenadores registrados aún en el sistema. Consulta en recepción.`)
         return NextResponse.json({ status: 'no_coaches' })
       }
 
@@ -267,7 +261,6 @@ export async function POST(req: Request) {
 
       await sendWhatsAppMessage(phone, msg)
 
-      // Guardar sesión esperando selección de coach
       await prisma.qrToken.deleteMany({
         where: { tenantId: tenant.id, token: { startsWith: `EVAL_COACH_SEL_${phone}` } },
       })
@@ -284,7 +277,7 @@ export async function POST(req: Request) {
     }
 
     // -------------------------------------------------------------
-    // FLUJO 2: PAGO DE MENSUALIDAD (QR: MEM-XXXX) -> LISTAR PLANES
+    // FLUJO 2: PAGO DE MENSUALIDAD (QR: MEM-*) -> REQUIERE APROBACIÓN EN CAJA
     // -------------------------------------------------------------
     if (rawText.startsWith('MEM-')) {
       const plans = await prisma.membershipPlan.findMany({
@@ -303,7 +296,6 @@ export async function POST(req: Request) {
 
       await sendWhatsAppMessage(phone, msg)
 
-      // Guardar sesión de selección de plan
       await prisma.qrToken.deleteMany({
         where: { tenantId: tenant.id, token: { startsWith: `PLAN_SEL_${phone}` } },
       })
@@ -320,12 +312,12 @@ export async function POST(req: Request) {
     }
 
     // -------------------------------------------------------------
-    // FLUJO 3: TIENDA RETAIL / BARRA (QR: RET-XXXX)
+    // FLUJO 3: TIENDA RETAIL / BARRA (QR: RET-*) -> REQUIERE APROBACIÓN EN CAJA
     // -------------------------------------------------------------
     if (rawText.startsWith('RET-')) {
       const cashbackPct = Number(tenant.storeReferralCommPct)
 
-      // Registrar la solicitud en caja (monto inicial $0 para que recepción lo confirme)
+      // Registra en caja con estado PENDING para que recepción ponga el monto y apruebe
       await prisma.payment.create({
         data: {
           tenantId: tenant.id,
@@ -341,7 +333,7 @@ export async function POST(req: Request) {
 
       await sendWhatsAppMessage(
         phone,
-        `🥤 *COMPRA EN BARRA REGISTRADA*\n\nHola *${customer.name}*!\n\nTu consumo fue enviado al monitor de recepción. El staff confirmará el monto de tus productos y se acreditará tu *${cashbackPct}% de Cashback* a tu Billetera Digital.\n\n💰 Saldo actual: *$${currentBalance.toFixed(2)} USD*`
+        `🥤 *COMPRA EN BARRA REGISTRADA*\n\nHola *${customer.name}*!\n\nTu consumo fue enviado al monitor de recepción. El staff confirmará el monto de tus productos y una vez aprobado, se acreditará tu *${cashbackPct}% de Cashback* a tu Billetera Digital.\n\n💰 Saldo actual: *$${currentBalance.toFixed(2)} USD*`
       )
 
       return NextResponse.json({ status: 'retail_queued' })
