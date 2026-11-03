@@ -60,3 +60,4 @@ export async function GET(
     return new Response('Error procesando el escaneo', { status: 500 })
   }
 }
+
