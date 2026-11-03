@@ -2,4 +2,5 @@ requests
 python-dotenv
 pymysql
 pytz
-
+gunicorn
+flask
