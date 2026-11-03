@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,21 +7,65 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// -------------------------------------------------------------
+// TABLAS PREVIAS DE TITANUS GYM (CONSERVADAS 100% INTACTAS)
+// -------------------------------------------------------------
+
+model clientes {
+  id                Int       @id @default(autoincrement())
+  nombre            String    @db.VarChar(255)
+  telefono          String?   @unique(map: "telefono") @db.VarChar(50)
+  fecha_vencimiento DateTime? @db.Date
+  fecha_nacimiento  DateTime? @db.Date
+  deuda             Decimal?  @default(0.00) @db.Decimal(10, 2)
+  inasistencias     Int?      @default(0)
+  ultima_asistencia DateTime? @db.Date
+  estado            String?   @default("activo") @db.VarChar(20)
+  fecha_registro    DateTime? @default(now()) @db.Timestamp(0)
+}
+
+model cola_mensajes {
+  id             Int       @id @default(autoincrement())
+  nombre         String?   @db.VarChar(255)
+  telefono       String?   @db.VarChar(50)
+  tipo           String?   @db.VarChar(50)
+  mensaje        String?   @db.MediumText
+  estado         String?   @default("pendiente") @db.VarChar(20)
+  fecha_creacion DateTime? @default(now()) @db.Timestamp(0)
+  fecha_envio    DateTime? @db.Timestamp(0)
+}
+
+model configuracion {
+  id                 Int       @id @default(autoincrement())
+  clave              String    @unique(map: "clave") @db.VarChar(100)
+  valor              String?   @db.MediumText
+  descripcion        String?   @db.MediumText
+  fecha_modificacion DateTime? @default(now()) @db.Timestamp(0)
+}
+
+model media {
+  id             Int       @id @default(autoincrement())
+  filename       String    @unique(map: "filename") @db.VarChar(255)
+  content        Bytes
+  mimetype       String?   @db.VarChar(100)
+  fecha_creacion DateTime? @default(now()) @db.Timestamp(0)
+}
+
+// -------------------------------------------------------------
+// NUEVO SISTEMA TÁCTICO: FIDELIZACIÓN, CASHBACK, QR Y COACHES
+// -------------------------------------------------------------
+
 model Tenant {
   id                      String         @id @default(uuid())
   name                    String
   slug                    String         @unique
-  referralCommPct         Decimal        @default(10.00) @db.Decimal(5, 2)
-  storeReferralCommPct    Decimal        @default(5.00) @db.Decimal(5, 2)
+  referralCommPct         Decimal        @default(10.00) @db.Decimal(5, 2) // % Cashback Mensualidad
+  storeReferralCommPct    Decimal        @default(5.00) @db.Decimal(5, 2)  // % Cashback Tienda / Barra
   currency                String         @default("USD")
   whatsappPhone           String?
-  googleReviewUrl         String?        // Enlace de Google Maps Reviews
+  googleReviewUrl         String?        @db.VarChar(500)
   inactivityThresholdDays Int            @default(14)
   isActive                Boolean        @default(true)
-  showOverviewTab         Boolean        @default(true)
-  showEvaluationsTab      Boolean        @default(true)
-  showWalletTab           Boolean        @default(true)
-  showConfigTab           Boolean        @default(true)
   createdAt               DateTime       @default(now())
   updatedAt               DateTime       @updatedAt
 
@@ -42,9 +83,9 @@ model Staff {
   id           String        @id @default(uuid())
   tenantId     String
   name         String
-  email        String        @unique
-  passwordHash String
-  role         String        @default("OWNER") // OWNER | TRAINER | MANAGER
+  email        String?       @unique
+  passwordHash String?
+  role         String        @default("TRAINER") // OWNER | TRAINER | MANAGER
   avatarUrl    String?
   isActive     Boolean       @default(true)
   createdAt    DateTime      @default(now())
@@ -96,8 +137,8 @@ model WalletTransaction {
   walletId    String
   type        String   // CASHBACK_EARNED | REDEEMED | ADJUSTMENT
   amount      Decimal  @db.Decimal(10, 2)
-  description String?
-  referenceId String?  // ID de Payment si aplica
+  description String?  @db.VarChar(255)
+  referenceId String?  @db.VarChar(100)
   createdAt   DateTime @default(now())
 
   tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -117,7 +158,7 @@ model Payment {
   cashbackAmt Decimal   @db.Decimal(10, 2)
   status      String    @default("PENDING") // PENDING | APPROVED | REJECTED
   approvedAt  DateTime?
-  description String?
+  description String?   @db.VarChar(255)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -132,9 +173,9 @@ model Evaluation {
   id          String   @id @default(uuid())
   tenantId    String
   customerId  String
-  staffId     String   // Coach calificado
+  staffId     String   // Entrenador calificado
   stars       Int      // 1 a 5
-  comment     String?  // Feedback interno en caso de 1-4 estrellas
+  comment     String?  @db.Text // Comentario de auditoría si es 1-4 estrellas
   createdAt   DateTime @default(now())
 
   tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -160,16 +201,16 @@ model QrToken {
 }
 
 model MembershipPlan {
-  id        String   @id @default(uuid())
-  tenantId  String
-  name      String   // e.g. "Mes Completo", "Trimestre", "Pase Diario"
-  price     Decimal  @db.Decimal(10, 2)
-  durationDays Int   @default(30)
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String   @id @default(uuid())
+  tenantId     String
+  name         String
+  price        Decimal  @db.Decimal(10, 2)
+  durationDays Int      @default(30)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
 }
