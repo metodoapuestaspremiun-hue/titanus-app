@@ -33,6 +33,11 @@ export default function ReceptionDashboard() {
     token: '',
   })
 
+  // Modal de aprobación de Retail con detalle de producto
+  const [retailModal, setRetailModal] = useState<{ open: boolean; paymentId: string; customerName: string } | null>(null)
+  const [retailAmount, setRetailAmount] = useState('')
+  const [retailProduct, setRetailProduct] = useState('')
+
   const fetchTenantConfig = async () => {
     try {
       const res = await axios.get('/api/club/config')
@@ -59,22 +64,46 @@ export default function ReceptionDashboard() {
   }, [])
 
   const handleApprove = async (id: string, type: string, currentAmount: number) => {
-    let finalAmount = currentAmount
-
-    // Para compras en barra (RETAIL), el monto lo confirma recepción en el momento
-    if (type === 'RETAIL' && currentAmount === 0) {
-      const amountStr = prompt('Ingrese el monto total de la compra en barra (USD):')
-      if (!amountStr) return
-      finalAmount = parseFloat(amountStr)
-      if (isNaN(finalAmount) || finalAmount <= 0) {
-        alert('Monto inválido')
-        return
-      }
+    // Para compras en Tienda/Barra, mostrar modal con producto + monto
+    if (type === 'RETAIL') {
+      const item = payments.find(p => p.id === id)
+      setRetailModal({
+        open: true,
+        paymentId: id,
+        customerName: item?.customer?.name || 'Socio',
+      })
+      setRetailAmount(currentAmount > 0 ? String(currentAmount) : '')
+      setRetailProduct('')
+      return
     }
 
     try {
       setLoading(true)
-      await axios.post('/api/club/payments', { paymentId: id, action: 'APPROVE', finalAmount })
+      await axios.post('/api/club/payments', { paymentId: id, action: 'APPROVE', finalAmount: currentAmount })
+      await fetchPendingPayments()
+    } catch (e: any) {
+      alert('Error aprobando pago: ' + (e.response?.data?.error || e.message))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleApproveRetail = async () => {
+    if (!retailModal) return
+    const amount = parseFloat(retailAmount)
+    if (isNaN(amount) || amount <= 0) {
+      alert('Ingresa un monto válido mayor a $0.')
+      return
+    }
+    try {
+      setLoading(true)
+      await axios.post('/api/club/payments', {
+        paymentId: retailModal.paymentId,
+        action: 'APPROVE',
+        finalAmount: amount,
+        productDescription: retailProduct.trim() || null,
+      })
+      setRetailModal(null)
       await fetchPendingPayments()
     } catch (e: any) {
       alert('Error aprobando pago: ' + (e.response?.data?.error || e.message))
@@ -191,7 +220,7 @@ export default function ReceptionDashboard() {
           <h1 className="text-3xl font-black tracking-tight text-white flex items-center gap-2">
             MONITOR DE RECEPCIÓN
             <span className="text-xs px-2.5 py-1 rounded-full bg-[#FCDD09]/10 text-[#FCDD09] border border-[#FCDD09]/30 font-bold uppercase tracking-widest">
-              Zero-Jump
+              En Tiempo Real
             </span>
           </h1>
           <p className="text-sm text-zinc-400 mt-1">
@@ -483,7 +512,97 @@ export default function ReceptionDashboard() {
             </div>
 
             <div className="pt-4 border-t border-white/10 text-center">
-              <span className="text-xs text-zinc-500">Filosofía Zero-Jump &bull; TITANUS CRM</span>
+              <span className="text-xs text-zinc-500">TITANUS SYSTEM &bull; Recepción y Caja</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Aprobación de Venta Retail con Producto */}
+      {retailModal?.open && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-in fade-in">
+          <div className="bg-zinc-950 border border-[#FCDD09]/40 rounded-3xl p-7 max-w-md w-full shadow-2xl">
+            <div className="flex items-center justify-between mb-5">
+              <div>
+                <span className="text-[11px] uppercase font-bold text-[#FCDD09] tracking-widest block mb-0.5">
+                  Aprobar Venta · Tienda & Barra
+                </span>
+                <h3 className="text-xl font-black text-white">
+                  {retailModal.customerName}
+                </h3>
+              </div>
+              <button
+                onClick={() => setRetailModal(null)}
+                className="p-2 rounded-full bg-zinc-900 text-zinc-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Monto */}
+              <div>
+                <label className="text-xs font-bold uppercase text-zinc-400 tracking-wider block mb-2">
+                  Monto Total de la Compra (USD) *
+                </label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[#FCDD09] font-black text-lg">$</span>
+                  <input
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={retailAmount}
+                    onChange={(e) => setRetailAmount(e.target.value)}
+                    className="w-full pl-9 pr-4 py-3 bg-zinc-900 border border-white/10 rounded-xl text-white text-lg font-bold focus:outline-none focus:border-[#FCDD09] transition-colors"
+                  />
+                </div>
+              </div>
+
+              {/* Producto */}
+              <div>
+                <label className="text-xs font-bold uppercase text-zinc-400 tracking-wider block mb-2">
+                  Producto(s) Adquirido(s) <span className="text-zinc-500 font-normal normal-case">(opcional)</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ej: Proteína Whey 1kg, Creatina, Batido energético..."
+                  value={retailProduct}
+                  onChange={(e) => setRetailProduct(e.target.value)}
+                  className="w-full px-4 py-3 bg-zinc-900 border border-white/10 rounded-xl text-white text-sm focus:outline-none focus:border-[#FCDD09] transition-colors placeholder-zinc-500"
+                  maxLength={150}
+                />
+                <span className="text-[11px] text-zinc-500 mt-1 block">
+                  Se guardará en el historial del cliente para trazabilidad completa.
+                </span>
+              </div>
+
+              {/* Preview del Cashback */}
+              {retailAmount && !isNaN(parseFloat(retailAmount)) && parseFloat(retailAmount) > 0 && (
+                <div className="p-3 rounded-xl bg-[#FCDD09]/10 border border-[#FCDD09]/30 flex items-center justify-between">
+                  <span className="text-xs text-zinc-300">Cashback que recibirá el socio:</span>
+                  <span className="font-black text-[#FCDD09]">
+                    +${((parseFloat(retailAmount) * (tenantConfig?.storeReferralCommPct || 5)) / 100).toFixed(2)} USD
+                  </span>
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() => setRetailModal(null)}
+                  className="flex-1 py-3 rounded-xl bg-zinc-900 border border-white/10 text-zinc-300 hover:text-white text-sm font-bold transition-all"
+                >
+                  Cancelar
+                </button>
+                <button
+                  disabled={loading || !retailAmount || isNaN(parseFloat(retailAmount)) || parseFloat(retailAmount) <= 0}
+                  onClick={handleApproveRetail}
+                  className="flex-1 py-3 rounded-xl bg-[#FCDD09] text-black font-black text-sm flex items-center justify-center gap-2 hover:bg-[#E5C100] transition-all disabled:opacity-50"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  Aprobar & Acreditar
+                </button>
+              </div>
             </div>
           </div>
         </div>

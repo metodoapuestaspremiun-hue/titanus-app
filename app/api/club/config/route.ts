@@ -1,12 +1,53 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
-// GET /api/club/config: Obtiene la configuración actual del Tenant
+// Función para obtener el número real conectado actualmente a la instancia de Evolution
+async function getEvolutionLiveNumber(): Promise<string | null> {
+  try {
+    const evoUrl = process.env.EVOLUTION_API_URL || 'http://178.238.238.158:8080'
+    const evoKey = process.env.EVOLUTION_API_KEY || '42a447c1-3d74-4b52-9571-042c174f7621'
+    const evoInst = process.env.EVOLUTION_INSTANCE_NAME || 'gym_bot'
+
+    const evoRes = await fetch(`${evoUrl}/instance/fetchInstances`, {
+      headers: { apikey: evoKey },
+      cache: 'no-store',
+    })
+    const data = await evoRes.json()
+    const list = Array.isArray(data) ? data : data?.value || []
+    const target = list.find((i: any) => i.name === evoInst)
+
+    if (target && target.ownerJid) {
+      return target.ownerJid.split('@')[0].replace(/[^0-9]/g, '')
+    }
+  } catch (err) {
+    console.error('Error consultando Evolution API en config:', err)
+  }
+  return null
+}
+
+// GET /api/club/config: Obtiene la configuración actual del Tenant sincronizada en tiempo real con Evolution
 export async function GET() {
   try {
     const tenant = await prisma.tenant.findUnique({
       where: { slug: 'titanus-gym' },
     })
+
+    if (!tenant) {
+      return NextResponse.json({ error: 'Tenant no encontrado' }, { status: 404 })
+    }
+
+    // Consultar el número dinámico conectado en tiempo real a la instancia de Evolution
+    const livePhone = await getEvolutionLiveNumber()
+
+    // Si hay un número conectado en Evolution y difiere del guardado en la BD, sincronizarlo en background
+    if (livePhone && livePhone !== tenant.whatsappPhone) {
+      await prisma.tenant.update({
+        where: { slug: 'titanus-gym' },
+        data: { whatsappPhone: livePhone },
+      })
+      tenant.whatsappPhone = livePhone
+    }
+
     return NextResponse.json(tenant)
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 })

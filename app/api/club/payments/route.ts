@@ -25,7 +25,7 @@ export async function GET() {
 // POST: Aprobar o rechazar un pago y acreditar cashback a la Wallet
 export async function POST(req: Request) {
   try {
-    const { paymentId, action, finalAmount } = await req.json()
+    const { paymentId, action, finalAmount, productDescription } = await req.json()
     // action: 'APPROVE' | 'REJECT'
     // finalAmount: opcional, para cuando recepción edita el monto de retail
 
@@ -57,7 +57,10 @@ export async function POST(req: Request) {
     const cashbackAmt = parseFloat(((amount * cashbackPct) / 100).toFixed(2))
 
     const result = await prisma.$transaction(async (tx) => {
-      // 1. Actualizar pago como aprobado con monto definitivo
+      // 1. Actualizar pago como aprobado con monto definitivo y descripción del producto
+      const descFinal = productDescription
+        ? `${payment.description || 'Compra'} · ${productDescription}`
+        : payment.description || (payment.type === 'RETAIL' ? 'Compra en Tienda/Barra' : 'Pago de cuota')
       const updatedPayment = await tx.payment.update({
         where: { id: paymentId },
         data: {
@@ -65,6 +68,7 @@ export async function POST(req: Request) {
           approvedAt: new Date(),
           amount,
           cashbackAmt,
+          description: descFinal,
         },
       })
 
@@ -92,7 +96,7 @@ export async function POST(req: Request) {
           walletId: wallet.id,
           type: 'CASHBACK_EARNED',
           amount: cashbackAmt,
-          description: `Cashback ${cashbackPct}% por ${payment.type === 'MEMBERSHIP' ? 'Cuota' : 'Barra/Retail'} - $${amount.toFixed(2)}`,
+          description: `Cashback ${cashbackPct}% por ${payment.type === 'MEMBERSHIP' ? 'Cuota' : `Barra/Retail${productDescription ? ` (${productDescription})` : ''}`} - $${amount.toFixed(2)}`,
           referenceId: payment.id,
         },
       })
@@ -100,11 +104,11 @@ export async function POST(req: Request) {
       return { updatedPayment, newBalance }
     })
 
-    // 5. Notificación WhatsApp al socio con confirmación real
     const tipo = payment.type === 'MEMBERSHIP' ? 'cuota mensual' : 'compra en barra'
+    const prodLine = productDescription ? `\n📦 Producto: *${productDescription}*` : ''
     await sendWhatsAppMessage(
       payment.customer.phone,
-      `✅ *¡Pago Aprobado en Caja, Spartan!*\n\n🏋️ *${payment.tenant.name}*\n\n💵 ${tipo.charAt(0).toUpperCase() + tipo.slice(1)}: *$${amount.toFixed(2)} USD*\n🎁 Cashback acreditado: *+$${cashbackAmt.toFixed(2)} USD* (${cashbackPct}%)\n💰 Tu nuevo saldo en Monedero: *$${result.newBalance.toFixed(2)} USD*\n\n¡Gracias por confiar en Titanus! Puedes canjear tu saldo en tu próxima visita. 💪`
+      `✅ *¡Pago Aprobado en Caja, Spartan!*\n\n🏋️ *${payment.tenant.name}*\n\n💵 ${tipo.charAt(0).toUpperCase() + tipo.slice(1)}: *$${amount.toFixed(2)} USD*${prodLine}\n🎁 Cashback acreditado: *+$${cashbackAmt.toFixed(2)} USD* (${cashbackPct}%)\n💰 Tu nuevo saldo en Monedero: *$${result.newBalance.toFixed(2)} USD*\n\n¡Gracias por confiar en Titanus! Puedes canjear tu saldo en tu próxima visita. 💪`
     )
 
     return NextResponse.json({ success: true, status: 'APPROVED', newBalance: result.newBalance })

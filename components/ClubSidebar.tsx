@@ -69,7 +69,7 @@ export default function ClubSidebar() {
               En Línea
             </span>
           </div>
-          <span className="text-zinc-500 text-[11px] block">Instancia Evolution API</span>
+          <span className="text-zinc-500 text-[11px] block">Servicio Activo</span>
         </div>
 
         {/* Cerrar Sesión */}

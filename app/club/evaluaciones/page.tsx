@@ -8,7 +8,9 @@ import {
   RefreshCw,
   Filter,
   MessageSquare,
-  Calendar
+  Calendar,
+  X,
+  UserCheck
 } from 'lucide-react'
 import axios from 'axios'
 
@@ -20,6 +22,9 @@ export default function CoachesRanking() {
   // Filtros
   const [selectedCoach, setSelectedCoach] = useState('ALL')
   const [selectedStars, setSelectedStars] = useState('ALL')
+
+  // Modal de Detalle de Coach al hacer clic
+  const [activeCoachModal, setActiveCoachModal] = useState<any | null>(null)
 
   const fetchData = async () => {
     try {
@@ -40,8 +45,13 @@ export default function CoachesRanking() {
     fetchData()
   }, [selectedCoach, selectedStars])
 
+  // Filtrar opiniones específicas para el modal del coach seleccionado
+  const coachModalEvaluations = activeCoachModal
+    ? evaluations.filter((e) => e.coachId === activeCoachModal.id)
+    : []
+
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-8">
+    <div className="p-8 max-w-7xl mx-auto space-y-8 relative">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-black tracking-tight text-white flex items-center gap-2">
@@ -49,7 +59,7 @@ export default function CoachesRanking() {
             <Trophy className="w-7 h-7 text-[#FCDD09]" />
           </h1>
           <p className="text-sm text-zinc-400 mt-1">
-            Flujo 1: Calificaciones de socios. Filtra por estrellas o entrenador específico.
+            Calificaciones de socios en tiempo real. Haz clic en cualquier entrenador para ver todas sus opiniones.
           </p>
         </div>
 
@@ -61,7 +71,7 @@ export default function CoachesRanking() {
         </button>
       </div>
 
-      {/* Podio Top 3 */}
+      {/* Podio Top 3 - Clickeable */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2">
         {coaches.slice(0, 3).map((coach, index) => {
           const rank = index + 1
@@ -75,11 +85,12 @@ export default function CoachesRanking() {
           return (
             <div
               key={coach.id}
+              onClick={() => setActiveCoachModal(coach)}
               className={`p-6 rounded-2xl bg-zinc-950 border ${
                 rank === 1
                   ? 'border-[#FCDD09] shadow-xl shadow-[#FCDD09]/10'
-                  : 'border-white/10'
-              } flex flex-col justify-between relative`}
+                  : 'border-white/10 hover:border-white/30'
+              } flex flex-col justify-between relative cursor-pointer hover:scale-[1.02] transition-all group`}
             >
               <div className="flex items-center justify-between mb-4">
                 <span
@@ -94,8 +105,10 @@ export default function CoachesRanking() {
               </div>
 
               <div>
-                <h3 className="text-lg font-black text-white">{coach.name}</h3>
-                <p className="text-xs text-[#FCDD09] mb-3">Coach Titular Titanus</p>
+                <h3 className="text-lg font-black text-white group-hover:text-[#FCDD09] transition-colors">
+                  {coach.name}
+                </h3>
+                <p className="text-xs text-[#FCDD09] mb-3">Coach Titular Titanus &bull; Ver opiniones &rarr;</p>
 
                 <div className="w-full bg-zinc-900 h-2 rounded-full overflow-hidden mb-2">
                   <div
@@ -160,9 +173,110 @@ export default function CoachesRanking() {
           </div>
         </div>
 
-        {/* Lista de Opiniones */}
+        {/* Lista de Opiniones General */}
         {evaluacionesListRender(evaluations)}
       </div>
+
+      {/* Modal Detallado de un Coach */}
+      {activeCoachModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in">
+          <div className="bg-zinc-950 border border-[#FCDD09]/40 rounded-3xl p-6 sm:p-8 max-w-2xl w-full relative shadow-2xl max-h-[90vh] flex flex-col">
+            <button
+              onClick={() => setActiveCoachModal(null)}
+              className="absolute top-5 right-5 p-2 rounded-full bg-zinc-900 text-zinc-400 hover:text-white"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Cabecera del Entrenador */}
+            <div className="flex items-center gap-4 pb-6 border-b border-white/10">
+              <div className="w-14 h-14 rounded-2xl bg-[#FCDD09] flex items-center justify-center font-black text-2xl text-black shadow-lg shadow-[#FCDD09]/20">
+                {activeCoachModal.name.charAt(0)}
+              </div>
+              <div>
+                <span className="text-[11px] uppercase font-bold text-[#FCDD09] tracking-widest block">
+                  Perfil de Entrenador
+                </span>
+                <h3 className="text-2xl font-black text-white">{activeCoachModal.name}</h3>
+                <div className="flex items-center gap-3 mt-1">
+                  <div className="flex items-center gap-1 text-[#FCDD09] text-sm font-bold">
+                    <Star className="w-4 h-4 fill-[#FCDD09]" />
+                    {activeCoachModal.stars.toFixed(2)} / 5.00
+                  </div>
+                  <span className="text-xs text-zinc-500">
+                    &bull; {activeCoachModal.totalReviews} reseña(s)
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Lista de opiniones del Coach */}
+            <div className="flex-1 overflow-y-auto py-4 space-y-3">
+              <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">
+                Reseñas de este entrenador ({coachModalEvaluations.length})
+              </h4>
+
+              {coachModalEvaluations.length === 0 ? (
+                <div className="text-center py-12 text-zinc-500 text-sm">
+                  Este entrenador aún no tiene reseñas registradas con los filtros actuales.
+                </div>
+              ) : (
+                <div className="divide-y divide-white/10">
+                  {coachModalEvaluations.map((item) => (
+                    <div key={item.id} className="py-3.5 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-white text-sm">{item.customerName}</span>
+                          <span className="text-xs text-zinc-500 font-mono">+{item.customerPhone}</span>
+                        </div>
+                        <div className="flex items-center gap-0.5 text-[#FCDD09]">
+                          {Array.from({ length: 5 }).map((_, i) => (
+                            <Star
+                              key={i}
+                              className={`w-3.5 h-3.5 ${
+                                i < item.stars ? 'fill-[#FCDD09] text-[#FCDD09]' : 'text-zinc-700'
+                              }`}
+                            />
+                          ))}
+                        </div>
+                      </div>
+
+                      {item.comment ? (
+                        <p className="text-xs text-zinc-300 bg-zinc-900/80 p-3 rounded-xl border border-white/5">
+                          "{item.comment}"
+                        </p>
+                      ) : (
+                        <p className="text-xs text-zinc-500 italic">
+                          {item.stars === 5 ? 'Calificación 5★ (Derivado a Google Reviews).' : 'Sin comentario escrito.'}
+                        </p>
+                      )}
+
+                      <div className="flex items-center gap-1.5 text-[10px] text-zinc-600">
+                        <Calendar className="w-3 h-3" />
+                        {new Date(item.createdAt).toLocaleString('es-EC')}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Footer Modal */}
+            <div className="pt-4 border-t border-white/10 flex justify-between items-center text-xs text-zinc-500">
+              <span>TITANUS SYSTEM &bull; Evaluación Docente</span>
+              <button
+                onClick={() => {
+                  setSelectedCoach(activeCoachModal.id)
+                  setActiveCoachModal(null)
+                }}
+                className="px-3 py-1.5 rounded-lg bg-zinc-900 text-[#FCDD09] border border-[#FCDD09]/30 hover:bg-[#FCDD09] hover:text-black font-bold transition-all"
+              >
+                Filtrar tabla principal por este Coach
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

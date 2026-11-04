@@ -133,7 +133,7 @@ export default function ClubConfig() {
         googleReviewUrl: reviewUrl,
         whatsappPhone: whatsappPhone,
       })
-      setMessage('✅ Configuración guardada en la base de datos con éxito.')
+      setMessage('✅ Configuración guardada con éxito.')
       setTimeout(() => setMessage(''), 4000)
     } catch (e: any) {
       alert('Error guardando configuración: ' + (e.response?.data?.error || e.message))
@@ -396,8 +396,8 @@ export default function ClubConfig() {
                   <Smartphone className="w-6 h-6" />
                 </div>
                 <div>
-                  <div className="font-bold text-white">WhatsApp Instance</div>
-                  <div className="text-sm text-zinc-400">gym_bot (Evolution API)</div>
+                  <div className="font-bold text-white">Canal de WhatsApp</div>
+                  <div className="text-sm text-zinc-400">Línea Oficial Titanus</div>
                 </div>
               </div>
 

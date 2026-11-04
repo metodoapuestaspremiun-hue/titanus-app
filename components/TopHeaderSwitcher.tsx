@@ -38,7 +38,7 @@ export default function TopHeaderSwitcher() {
         </Link>
 
         <Link
-          href="/"
+          href="/bot-dashboard"
           className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
             !isClub
               ? "bg-[#FCDD09] text-black shadow-md"
