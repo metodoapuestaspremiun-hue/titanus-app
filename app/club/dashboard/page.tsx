@@ -13,7 +13,8 @@ import {
   ChevronRight,
   X,
   RefreshCw,
-  ExternalLink
+  ExternalLink,
+  Download
 } from 'lucide-react'
 import axios from 'axios'
 import { QRCodeSVG } from 'qrcode.react'
@@ -126,6 +127,33 @@ export default function ReceptionDashboard() {
 
   const [generatingQr, setGeneratingQr] = useState(false)
 
+  // Descargar el código QR proyectado como imagen PNG
+  const downloadQrCode = () => {
+    const svg = document.getElementById('qr-code-svg')
+    if (!svg) return
+
+    const svgData = new XMLSerializer().serializeToString(svg)
+    const canvas = document.createElement('canvas')
+    const ctx = canvas.getContext('2d')
+    const img = new Image()
+
+    img.onload = () => {
+      canvas.width = 600
+      canvas.height = 600
+      if (ctx) {
+        ctx.fillStyle = '#FFFFFF'
+        ctx.fillRect(0, 0, canvas.width, canvas.height)
+        ctx.drawImage(img, 50, 50, 500, 500)
+        const pngFile = canvas.toDataURL('image/png')
+        const downloadLink = document.createElement('a')
+        downloadLink.download = `QR_${qrModal.type}_${qrModal.token}.png`
+        downloadLink.href = pngFile
+        downloadLink.click()
+      }
+    }
+    img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)))
+  }
+
   const openDynamicQr = async (type: 'MEMBERSHIP' | 'RETAIL' | 'EVALUATION', title: string) => {
     try {
       setGeneratingQr(true)
@@ -153,7 +181,7 @@ export default function ReceptionDashboard() {
   // Enlace directo de WhatsApp con el comando prefijado
   const whatsappTargetPhone = tenantConfig?.whatsappPhone || '593987654321'
   const getWhatsAppLink = (token: string) => {
-    return `https://wa.me/${whatsappTargetPhone}?text=${encodeURIComponent(token)}`
+    return `https://wa.me/${whatsappTargetPhone}?text=${encodeURIComponent(`Hola, mi código es ${token}`)}`
   }
 
   return (
@@ -371,6 +399,7 @@ export default function ReceptionDashboard() {
             {/* Renderizado QR Vectorial Real (Escaneable con cámara normal de celular) */}
             <div className="p-4 bg-white rounded-2xl inline-block shadow-lg mx-auto mb-4 border-4 border-[#FCDD09]">
               <QRCodeSVG
+                id="qr-code-svg"
                 value={getWhatsAppLink(qrModal.token)}
                 size={210}
                 level="M"
@@ -378,10 +407,18 @@ export default function ReceptionDashboard() {
               />
             </div>
 
-            <div className="mb-3">
+            <div className="flex items-center justify-center gap-2 mb-3">
               <span className="text-[11px] px-2.5 py-1 rounded-full bg-[#FCDD09]/10 border border-[#FCDD09]/30 text-[#FCDD09] font-mono font-bold">
                 Código Dinámico: {qrModal.token}
               </span>
+              <button
+                onClick={downloadQrCode}
+                className="p-1 rounded-lg bg-zinc-900 border border-white/10 hover:border-[#FCDD09] text-zinc-300 hover:text-white transition-all text-xs flex items-center gap-1 px-2"
+                title="Descargar imagen PNG del QR"
+              >
+                <Download className="w-3.5 h-3.5 text-[#FCDD09]" />
+                Descargar PNG
+              </button>
             </div>
 
             <p className="text-xs text-zinc-400 mb-3">

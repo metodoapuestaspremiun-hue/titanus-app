@@ -95,6 +95,29 @@ export async function POST(req: Request) {
 
       if (index >= 0 && index < coaches.length) {
         const chosenCoach = coaches[index]
+
+        // RESTRICCIÓN ANTISPAM: Máximo 1 evaluación al mismo coach cada 7 días por socio
+        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+        const recentEval = await prisma.evaluation.findFirst({
+          where: {
+            tenantId: tenant.id,
+            customerId: customer.id,
+            staffId: chosenCoach.id,
+            createdAt: { gt: sevenDaysAgo },
+          },
+        })
+
+        if (recentEval) {
+          await prisma.qrToken.deleteMany({
+            where: { tenantId: tenant.id, token: { startsWith: `EVAL_COACH_SEL_${phone}` } },
+          })
+          await sendWhatsAppMessage(
+            phone,
+            `⏳ *Límite de Evaluación Alcanzado*\n\nHola ${customer.name}, ya calificaste a *${chosenCoach.name}* en los últimos 7 días. Para mantener un podio justo, se permite una calificación por coach por semana.\n\n¡Gracias por tu apoyo continuo! 💪`
+          )
+          return NextResponse.json({ status: 'rate_limited' })
+        }
+
         await prisma.qrToken.deleteMany({
           where: { tenantId: tenant.id, token: { startsWith: `EVAL_COACH_SEL_${phone}` } },
         })
@@ -210,8 +233,12 @@ export async function POST(req: Request) {
       }
     }
 
+    // Extraer token si viene en formato "Hola, mi código es MEM-XXXX" o directamente "MEM-XXXX"
+    const match = rawText.match(/(MEM-[A-Z0-9]+|RET-[A-Z0-9]+|EVAL-[A-Z0-9]+)/i)
+    const tokenExtracted = match ? match[1].toUpperCase() : rawText
+
     // Si no es un comando de código QR, ignorar
-    const isQrCommand = rawText.startsWith('EVAL-') || rawText.startsWith('MEM-') || rawText.startsWith('RET-')
+    const isQrCommand = tokenExtracted.startsWith('EVAL-') || tokenExtracted.startsWith('MEM-') || tokenExtracted.startsWith('RET-')
     if (!isQrCommand) {
       return NextResponse.json({ status: 'not_club_command' })
     }
@@ -222,7 +249,7 @@ export async function POST(req: Request) {
     const validQr = await prisma.qrToken.findFirst({
       where: {
         tenantId: tenant.id,
-        token: rawText,
+        token: tokenExtracted,
         expiresAt: { gt: new Date() },
       },
     })
@@ -241,7 +268,7 @@ export async function POST(req: Request) {
     // -------------------------------------------------------------
     // FLUJO 1: CALIFICAR COACH (QR: EVAL-*) -> 100% AUTÓNOMO (NO REQUIERE APROBACIÓN)
     // -------------------------------------------------------------
-    if (rawText.startsWith('EVAL-')) {
+    if (tokenExtracted.startsWith('EVAL-')) {
       const coaches = await prisma.staff.findMany({
         where: { tenantId: tenant.id, isActive: true },
         orderBy: { name: 'asc' },
@@ -279,7 +306,7 @@ export async function POST(req: Request) {
     // -------------------------------------------------------------
     // FLUJO 2: PAGO DE MENSUALIDAD (QR: MEM-*) -> REQUIERE APROBACIÓN EN CAJA
     // -------------------------------------------------------------
-    if (rawText.startsWith('MEM-')) {
+    if (tokenExtracted.startsWith('MEM-')) {
       const plans = await prisma.membershipPlan.findMany({
         where: { tenantId: tenant.id, isActive: true },
         orderBy: { price: 'asc' },
@@ -314,7 +341,7 @@ export async function POST(req: Request) {
     // -------------------------------------------------------------
     // FLUJO 3: TIENDA RETAIL / BARRA (QR: RET-*) -> REQUIERE APROBACIÓN EN CAJA
     // -------------------------------------------------------------
-    if (rawText.startsWith('RET-')) {
+    if (tokenExtracted.startsWith('RET-')) {
       const cashbackPct = Number(tenant.storeReferralCommPct)
 
       // Registra en caja con estado PENDING para que recepción ponga el monto y apruebe

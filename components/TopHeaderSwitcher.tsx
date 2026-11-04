@@ -10,7 +10,7 @@ export default function TopHeaderSwitcher() {
 
   return (
     <header className="h-16 w-full bg-[#0a0a0a] border-b border-white/10 px-6 flex items-center justify-between select-none z-40 sticky top-0">
-      {/* Identidad de Marca Spartan */}
+      {/* Identidad Spartan */}
       <div className="flex items-center gap-3">
         <div className="w-9 h-9 rounded-lg bg-[#FCDD09] flex items-center justify-center shadow-md shadow-[#FCDD09]/10">
           <Dumbbell className="w-5 h-5 text-black" />
@@ -18,12 +18,12 @@ export default function TopHeaderSwitcher() {
         <div className="flex flex-col">
           <span className="font-black text-lg tracking-wider text-white">TITANUS SYSTEM</span>
           <span className="text-[10px] text-[#FCDD09] font-bold tracking-widest uppercase">
-            {isClub ? "Módulo Fidelización & QR (Principal)" : "Módulo Bot Difusión & Cumpleaños"}
+            {isClub ? "Módulo Fidelización" : "Módulo Bot Difusión & Mensajería"}
           </span>
         </div>
       </div>
 
-      {/* Switcher Táctico de Sistemas */}
+      {/* Switcher Táctico */}
       <div className="flex items-center bg-[#141414] p-1 rounded-xl border border-white/10">
         <Link
           href="/club/dashboard"
@@ -34,7 +34,7 @@ export default function TopHeaderSwitcher() {
           }`}
         >
           <Sparkles className="w-4 h-4" />
-          <span>Fidelización & QR (Principal)</span>
+          <span>Fidelización</span>
         </Link>
 
         <Link
@@ -52,4 +52,3 @@ export default function TopHeaderSwitcher() {
     </header>
   );
 }
-

@@ -78,7 +78,8 @@ export async function GET(
       whatsappPhone = tenant.whatsappPhone && tenant.whatsappPhone.length > 8 ? tenant.whatsappPhone : '593983776219'
     }
 
-    const waUrl = `https://wa.me/${whatsappPhone}?text=${encodeURIComponent(token)}`
+    const messageText = `Hola, mi código es ${token}`
+    const waUrl = `https://wa.me/${whatsappPhone}?text=${encodeURIComponent(messageText)}`
 
     return NextResponse.redirect(waUrl, 302)
   } catch (error) {
