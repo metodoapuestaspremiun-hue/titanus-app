@@ -1,52 +1,81 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { getTenantFromRequest } from '@/lib/getTenant'
 
-// GET /api/club/coaches: Lista todos los entrenadores
-export async function GET() {
+// GET /api/club/coaches: Lista todos los entrenadores del tenant actual
+export async function GET(req: Request) {
   try {
-    const tenant = await prisma.tenant.findUnique({ where: { slug: 'titanus-gym' } })
-    if (!tenant) return NextResponse.json({ coaches: [] })
+    const { tenantId } = await getTenantFromRequest(req)
 
     const coaches = await prisma.staff.findMany({
-      where: { tenantId: tenant.id },
+      where: { tenantId },
       orderBy: { createdAt: 'desc' },
     })
 
     return NextResponse.json({ coaches })
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    const status = error?.status || 500
+    return NextResponse.json({ error: error.message }, { status })
   }
 }
 
-// POST /api/club/coaches: Crear nuevo entrenador
+// POST /api/club/coaches: Crear nuevo entrenador en el tenant actual con soporte de avatarUrl
 export async function POST(req: Request) {
   try {
-    const { name, role } = await req.json()
+    const { tenantId } = await getTenantFromRequest(req)
+    const { name, role, avatarUrl } = await req.json()
+
     if (!name?.trim()) {
       return NextResponse.json({ error: 'El nombre es obligatorio' }, { status: 400 })
     }
 
-    const tenant = await prisma.tenant.findUnique({ where: { slug: 'titanus-gym' } })
-    if (!tenant) return NextResponse.json({ error: 'Tenant no configurado' }, { status: 400 })
-
     const newCoach = await prisma.staff.create({
       data: {
-        tenantId: tenant.id,
+        tenantId,
         name: name.trim(),
         role: role || 'TRAINER',
+        avatarUrl: avatarUrl?.trim() || null,
         isActive: true,
       },
     })
 
     return NextResponse.json({ success: true, coach: newCoach })
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    const status = error?.status || 500
+    return NextResponse.json({ error: error.message }, { status })
   }
 }
 
-// DELETE /api/club/coaches: Eliminar entrenador
+// PUT /api/club/coaches: Actualizar avatar u otros datos del entrenador
+export async function PUT(req: Request) {
+  try {
+    const { tenantId } = await getTenantFromRequest(req)
+    const { id, name, role, avatarUrl } = await req.json()
+
+    if (!id) {
+      return NextResponse.json({ error: 'ID requerido' }, { status: 400 })
+    }
+
+    const updatedCoach = await prisma.staff.updateMany({
+      where: { id, tenantId },
+      data: {
+        ...(name ? { name: name.trim() } : {}),
+        ...(role ? { role } : {}),
+        ...(avatarUrl !== undefined ? { avatarUrl: avatarUrl ? avatarUrl.trim() : null } : {}),
+      },
+    })
+
+    return NextResponse.json({ success: true, updated: updatedCoach })
+  } catch (error: any) {
+    const status = error?.status || 500
+    return NextResponse.json({ error: error.message }, { status })
+  }
+}
+
+// DELETE /api/club/coaches: Eliminar entrenador garantizando aislamiento multi-tenant
 export async function DELETE(req: Request) {
   try {
+    const { tenantId } = await getTenantFromRequest(req)
     const { searchParams } = new URL(req.url)
     const coachId = searchParams.get('id')
 
@@ -54,13 +83,13 @@ export async function DELETE(req: Request) {
       return NextResponse.json({ error: 'ID requerido' }, { status: 400 })
     }
 
-    await prisma.staff.delete({
-      where: { id: coachId },
+    await prisma.staff.deleteMany({
+      where: { id: coachId, tenantId },
     })
 
     return NextResponse.json({ success: true })
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    const status = error?.status || 500
+    return NextResponse.json({ error: error.message }, { status })
   }
 }
-

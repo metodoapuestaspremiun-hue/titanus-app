@@ -3,77 +3,99 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-    Users,
-    LayoutDashboard,
-    Settings,
-    LogOut,
-    Terminal,
-    Upload
+  Users,
+  LayoutDashboard,
+  Settings,
+  LogOut,
+  Terminal,
+  Upload,
+  X,
 } from "lucide-react";
-import { clsx, type ClassValue } from "clsx";
-import { twMerge } from "tailwind-merge";
 
-function cn(...inputs: ClassValue[]) {
-    return twMerge(clsx(inputs));
-}
-
-const navItems = [
-    { name: "Dashboard Bot", href: "/bot-dashboard", icon: LayoutDashboard },
-    { name: "Cargar Clientes", href: "/cargar-clientes", icon: Upload },
-    { name: "Clientes", href: "/clientes", icon: Users },
-    { name: "Configuración Bot", href: "/configuracion", icon: Settings },
-    { name: "Logs", href: "/logs", icon: Terminal },
+export const botNavItems = [
+  { name: "Dashboard Bot", href: "/bot-dashboard", icon: LayoutDashboard },
+  { name: "Cargar Clientes", href: "/cargar-clientes", icon: Upload },
+  { name: "Clientes", href: "/clientes", icon: Users },
+  { name: "Configuración Bot", href: "/configuracion", icon: Settings },
+  { name: "Logs", href: "/logs", icon: Terminal },
 ];
 
-export default function Sidebar() {
-    const pathname = usePathname();
-    const router = useRouter();
+interface SidebarProps {
+  onCloseMobile?: () => void;
+  isMobileDrawer?: boolean;
+}
 
-    const handleLogout = () => {
-        document.cookie = "titanus_session=; path=/; max-age=0; SameSite=Strict";
-        router.push("/login");
-    };
+export default function Sidebar({ onCloseMobile, isMobileDrawer = false }: SidebarProps) {
+  const pathname = usePathname();
+  const router = useRouter();
 
-    return (
-        <aside className="flex flex-col h-[calc(100vh-4rem)] w-64 bg-black border-r border-white/10 text-white select-none">
-            <div className="px-6 py-4">
-                <span className="text-[11px] font-bold tracking-widest uppercase text-zinc-500">
-                    Navegación Mensajería
-                </span>
-            </div>
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch {}
+    document.cookie = "gym_session=; path=/; max-age=0;";
+    document.cookie = "titanus_session=; path=/; max-age=0; SameSite=Strict";
+    router.push("/login");
+  };
 
-            <nav className="flex-1 px-4 space-y-1.5">
-                {navItems.map((item) => {
-                    const Icon = item.icon;
-                    const isActive = pathname === item.href;
-                    
-                    return (
-                        <Link
-                            key={item.name}
-                            href={item.href}
-                            className={cn(
-                                "flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all",
-                                isActive
-                                    ? "bg-[#FCDD09] text-black shadow-md shadow-[#FCDD09]/15"
-                                    : "text-zinc-400 hover:text-white hover:bg-zinc-900"
-                            )}
-                        >
-                            <Icon className={cn("h-5 w-5", isActive ? "text-black" : "text-[#FCDD09]")} />
-                            {item.name}
-                        </Link>
-                    );
-                })}
-            </nav>
+  const asideClasses = isMobileDrawer
+    ? "w-full h-full bg-black text-white flex flex-col justify-between p-4 select-none"
+    : "hidden md:flex flex-col sticky top-16 h-[calc(100vh-4rem)] w-64 bg-black border-r border-white/10 text-white select-none shrink-0";
 
-            <div className="p-4 border-t border-white/10">
-                <button
-                    onClick={handleLogout}
-                    className="flex items-center gap-3 px-4 py-3 w-full rounded-xl text-sm font-medium text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors"
-                >
-                    <LogOut className="h-5 w-5" />
-                    Cerrar Sesión
-                </button>
-            </div>
-        </aside>
-    );
+  return (
+    <aside className={asideClasses}>
+      <div>
+        <div className="flex items-center justify-between px-6 py-4">
+          <span className="text-[11px] font-bold tracking-widest uppercase text-zinc-500">
+            Navegación Mensajería
+          </span>
+          {isMobileDrawer && onCloseMobile && (
+            <button
+              onClick={onCloseMobile}
+              className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 md:hidden"
+              aria-label="Cerrar menú"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
+        </div>
+
+        <nav className="px-4 space-y-1.5">
+          {botNavItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = pathname === item.href;
+
+            return (
+              <Link
+                key={item.name}
+                href={item.href}
+                onClick={onCloseMobile}
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
+                  isActive
+                    ? "bg-[#ffe202] text-black font-bold shadow-lg shadow-[#ffe202]/10"
+                    : "text-zinc-400 hover:text-white hover:bg-white/5"
+                }`}
+              >
+                <Icon
+                  className="h-5 w-5"
+                  style={{ color: isActive ? "#000000" : "#ffe202" }}
+                />
+                <span>{item.name}</span>
+              </Link>
+            );
+          })}
+        </nav>
+      </div>
+
+      <div className="p-4 border-t border-white/10">
+        <button
+          onClick={handleLogout}
+          className="flex items-center gap-3 px-4 py-3 w-full rounded-xl text-sm font-medium text-zinc-400 hover:text-white hover:bg-white/5 transition-colors"
+        >
+          <LogOut className="h-5 w-5" />
+          Cerrar Sesión
+        </button>
+      </div>
+    </aside>
+  );
 }

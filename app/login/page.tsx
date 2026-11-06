@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { ShieldAlert, Lock, User, Brain } from "lucide-react";
+import { ShieldAlert, Lock, User, ArrowRight } from "lucide-react";
 import axios from "axios";
 
 export default function LoginPage() {
@@ -18,56 +19,75 @@ export default function LoginPage() {
         setLoading(true);
 
         try {
-            const response = await axios.post('/api/auth/login', { username, password });
+            const response = await axios.post('/api/auth/login', {
+                email: username,
+                username,
+                password,
+            });
             const { token } = response.data;
 
-            document.cookie = `titanus_session=${token}; path=/; max-age=86400; SameSite=Strict`;
-            router.push("/");
+            if (token) {
+                document.cookie = `gym_session=${token}; path=/; max-age=604800; SameSite=Lax`;
+                document.cookie = `titanus_session=${token}; path=/; max-age=604800; SameSite=Strict`;
+            }
+            router.push("/club/dashboard");
         } catch (err: any) {
-            setError(err.response?.data?.error || "ERROR EN LA ARENA. REINTENTA.");
+            setError(err.response?.data?.error || "Error al autenticar. Verifica tus credenciales.");
             setLoading(false);
         }
     };
 
     return (
-        <div className="min-h-screen bg-black flex items-center justify-center p-4 selection:bg-spartan-yellow selection:text-black">
+        <div className="min-h-screen bg-[var(--bg-app,#03080F)] flex items-center justify-center p-4 selection:bg-[#00F5D4] selection:text-black">
             <div className="w-full max-w-md space-y-8">
-                {/* Header */}
-                <div className="text-center space-y-2">
-                    <div className="inline-flex items-center justify-center p-4 bg-spartan-yellow/10 border border-spartan-yellow/20 rounded-full mb-4 animate-pulse">
-                        <Brain size={48} className="text-spartan-yellow" />
+                {/* Header Branding Oficial ALL-CRM */}
+                <div className="text-center space-y-3 flex flex-col items-center">
+                    <div className="h-16 w-auto max-w-[240px] flex items-center justify-center mb-1">
+                        <Image
+                            src="/branding/logo_main_trimmed.png"
+                            alt="ALL-CRM"
+                            width={220}
+                            height={60}
+                            className="object-contain h-14 w-auto"
+                            priority
+                            unoptimized
+                        />
                     </div>
-                    <h1 className="text-4xl font-extrabold tracking-tighter text-white">
-                        TITANUS <span className="text-spartan-yellow underline decoration-spartan-yellow/30 underline-offset-8">LOGIN</span>
-                    </h1>
-                    <p className="text-gray-500 font-bold uppercase tracking-widest text-[10px]">
-                        Solo para Guerreros Autorizados
+                    <p className="text-zinc-400 font-semibold tracking-wider text-xs uppercase">
+                        Plataforma Inteligente de Fidelización & Retención
                     </p>
                 </div>
 
-                {/* Form */}
-                <form onSubmit={handleLogin} className="bg-spartan-charcoal/30 border border-white/5 p-8 rounded-[40px] space-y-6 backdrop-blur-xl">
+                {/* Formulario */}
+                <form
+                    onSubmit={handleLogin}
+                    className="bg-[var(--bg-card,#05101C)] border border-[rgba(0,245,212,0.15)] p-8 rounded-3xl space-y-6 shadow-2xl backdrop-blur-xl"
+                >
                     <div className="space-y-4">
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-4">Gerrero</label>
+                        <div className="space-y-1.5">
+                            <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block">
+                                Email o Usuario del Gimnasio
+                            </label>
                             <div className="relative">
-                                <User className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 h-5 w-5" />
+                                <User className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 h-4 w-4" />
                                 <input
                                     type="text"
                                     required
                                     value={username}
                                     onChange={(e) => setUsername(e.target.value)}
-                                    placeholder="Nombre de Usuario"
+                                    placeholder="admin@titanusgym.com o Titanus Gym"
                                     autoComplete="username"
-                                    className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-spartan-yellow/50 transition-all font-bold"
+                                    className="w-full bg-zinc-900/90 border border-zinc-800 rounded-xl py-3.5 pl-11 pr-4 text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#00F5D4] focus:ring-1 focus:ring-[#00F5D4] transition-all text-sm font-medium"
                                 />
                             </div>
                         </div>
 
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest ml-4">Código Secreto</label>
+                        <div className="space-y-1.5">
+                            <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block">
+                                Contraseña de Acceso
+                            </label>
                             <div className="relative">
-                                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 h-5 w-5" />
+                                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 h-4 w-4" />
                                 <input
                                     type="password"
                                     required
@@ -75,29 +95,30 @@ export default function LoginPage() {
                                     onChange={(e) => setPassword(e.target.value)}
                                     placeholder="••••••••••••"
                                     autoComplete="current-password"
-                                    className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-spartan-yellow/50 transition-all font-bold"
+                                    className="w-full bg-zinc-900/90 border border-zinc-800 rounded-xl py-3.5 pl-11 pr-4 text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#00F5D4] focus:ring-1 focus:ring-[#00F5D4] transition-all text-sm font-medium"
                                 />
                             </div>
                         </div>
                     </div>
 
                     {error && (
-                        <div className="bg-red-500/10 border border-red-500/50 p-4 rounded-2xl flex items-center gap-3 text-red-500 text-xs font-bold animate-shake">
-                            <ShieldAlert size={20} />
-                            {error}
+                        <div className="bg-red-500/10 border border-red-500/30 p-3.5 rounded-xl flex items-center gap-3 text-red-400 text-xs font-semibold">
+                            <ShieldAlert size={18} className="shrink-0" />
+                            <span>{error}</span>
                         </div>
                     )}
 
                     <button
                         type="submit"
                         disabled={loading}
-                        className="w-full spartan-gradient hover:scale-[1.02] active:scale-95 text-black font-black py-4 rounded-2xl transition-all shadow-[0_20px_40px_rgba(252,221,9,0.15)] uppercase tracking-widest flex items-center justify-center gap-2 disabled:opacity-50"
+                        className="w-full bg-[#00F5D4] hover:bg-[#00e5ff] text-black font-extrabold py-3.5 rounded-xl transition-all shadow-[0_10px_25px_rgba(0,245,212,0.2)] uppercase tracking-wider text-xs flex items-center justify-center gap-2 disabled:opacity-50 active:scale-[0.98]"
                     >
-                        {loading ? "VERIFICANDO..." : "ENTRAR A LA ARENA"}
+                        <span>{loading ? "VERIFICANDO ACCESO..." : "INGRESAR AL PANEL"}</span>
+                        {!loading && <ArrowRight className="w-4 h-4" />}
                     </button>
 
-                    <p className="text-center text-[10px] text-gray-700 font-bold uppercase">
-                        Titanus Fitness v2.0 © 2025
+                    <p className="text-center text-[11px] text-zinc-500 font-medium">
+                        ALL-CRM SaaS v2.5 &bull; Acceso para Administradores de Gimnasio
                     </p>
                 </form>
             </div>

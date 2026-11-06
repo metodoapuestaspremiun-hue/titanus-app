@@ -1,14 +1,14 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { getTenantFromRequest } from '@/lib/getTenant'
 
-// GET /api/club/evaluaciones: Obtiene el ranking real de entrenadores y estadísticas
-export async function GET() {
+// GET /api/club/evaluaciones: Obtiene el ranking real de entrenadores y estadísticas del tenant
+export async function GET(req: Request) {
   try {
-    const tenant = await prisma.tenant.findUnique({ where: { slug: 'titanus-gym' } })
-    if (!tenant) return NextResponse.json({ coaches: [] })
+    const { tenantId } = await getTenantFromRequest(req)
 
     const coaches = await prisma.staff.findMany({
-      where: { tenantId: tenant.id, isActive: true },
+      where: { tenantId, isActive: true },
       include: {
         evaluations: true,
       },
@@ -35,7 +35,7 @@ export async function GET() {
 
     return NextResponse.json({ coaches: ranked })
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    const status = error?.status || 500
+    return NextResponse.json({ error: error.message }, { status })
   }
 }
-

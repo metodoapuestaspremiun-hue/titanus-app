@@ -29,16 +29,41 @@ export async function POST(req: Request) {
     ).trim()
     const lowerText = rawText.toLowerCase()
 
-    const tenant = await prisma.tenant.findUnique({ where: { slug: 'titanus-gym' } })
-    if (!tenant) return NextResponse.json({ error: 'Tenant no configurado' }, { status: 400 })
+    // 1. Extraer nombre de instancia de Evolution API para identificar el Tenant
+    const instanceName =
+      body.instance ||
+      body.instanceName ||
+      data?.instance ||
+      data?.instanceName ||
+      null
 
-    // Obtener o registrar cliente de fidelización
+    let tenant = null
+    if (instanceName) {
+      tenant = await prisma.tenant.findFirst({
+        where: { evolutionInstanceName: instanceName },
+      })
+    }
+
+    // Fallback retrocompatible para Titanus Gym
+    if (!tenant) {
+      tenant = await prisma.tenant.findUnique({
+        where: { slug: 'titanus-gym' },
+      })
+    }
+
+    if (!tenant) {
+      return NextResponse.json({ error: 'Tenant no configurado' }, { status: 400 })
+    }
+
+    const evoInstance = tenant.evolutionInstanceName || 'gym_bot'
+
+    // Obtener o registrar cliente de fidelización en este tenant
     let customer = await prisma.customer.findFirst({
       where: { tenantId: tenant.id, phone },
-      include: { wallets: true },
+      include: { wallets: { where: { tenantId: tenant.id } } },
     })
 
-    const senderName = message.pushName || 'Socio Titanus'
+    const senderName = message.pushName || `Socio ${tenant.name}`
     if (!customer) {
       customer = await prisma.customer.create({
         data: {
@@ -49,7 +74,7 @@ export async function POST(req: Request) {
         },
         include: { wallets: true },
       })
-    } else if (customer.name === 'Socio Titanus' && message.pushName) {
+    } else if (customer.name.startsWith('Socio ') && message.pushName) {
       await prisma.customer.update({
         where: { id: customer.id },
         data: { name: message.pushName },
@@ -67,8 +92,8 @@ export async function POST(req: Request) {
     ].includes(lowerText)
 
     if (isBalanceQuery) {
-      const msg = `💰 *TU BILLETERA DIGITAL - TITANUS GYM*\n\nHola *${customer.name}*!\n\n💵 Saldo disponible: *$${currentBalance.toFixed(2)} USD*\n\n🔥 Puedes canjear hasta el *100%* de este saldo en tu próxima mensualidad, batidos o suplementos en recepción.\n\n_Para canjear, solicítalo al staff en el mostrador._`
-      await sendWhatsAppMessage(phone, msg)
+      const msg = `💰 *TU BILLETERA DIGITAL - ${tenant.name.toUpperCase()}*\n\nHola *${customer.name}*!\n\n💵 Saldo disponible: *$${currentBalance.toFixed(2)} USD*\n\n🔥 Puedes canjear hasta el *100%* de este saldo en tu próxima mensualidad, batidos o suplementos en recepción.\n\n_Para canjear, solicítalo al staff en el mostrador._`
+      await sendWhatsAppMessage(phone, msg, evoInstance)
       return NextResponse.json({ status: 'balance_sent', balance: currentBalance })
     }
 
@@ -113,7 +138,8 @@ export async function POST(req: Request) {
           })
           await sendWhatsAppMessage(
             phone,
-            `⏳ *Límite de Evaluación Alcanzado*\n\nHola ${customer.name}, ya calificaste a *${chosenCoach.name}* en los últimos 7 días. Para mantener un podio justo, se permite una calificación por coach por semana.\n\n¡Gracias por tu apoyo continuo! 💪`
+            `⏳ *Límite de Evaluación Alcanzado*\n\nHola ${customer.name}, ya calificaste a *${chosenCoach.name}* en los últimos 7 días. Para mantener un podio justo, se permite una calificación por coach por semana.\n\n¡Gracias por tu apoyo continuo! 💪`,
+            evoInstance
           )
           return NextResponse.json({ status: 'rate_limited' })
         }
@@ -134,7 +160,8 @@ export async function POST(req: Request) {
 
         await sendWhatsAppMessage(
           phone,
-          `Has seleccionado a *${chosenCoach.name}*.\n\n⭐ ¿Cuántas estrellas le das a su entrenamiento?\nResponde con un número del *1 al 5* (Donde 5 es Excelente).`
+          `Has seleccionado a *${chosenCoach.name}*.\n\n⭐ ¿Cuántas estrellas le das a su entrenamiento?\nResponde con un número del *1 al 5* (Donde 5 es Excelente).`,
+          evoInstance
         )
         return NextResponse.json({ status: 'coach_selected', coach: chosenCoach.name })
       }
@@ -173,12 +200,14 @@ export async function POST(req: Request) {
         const reviewUrl = tenant.googleReviewUrl || 'https://maps.google.com'
         await sendWhatsAppMessage(
           phone,
-          `⭐ *¡Muchísimas gracias por tus 5 Estrellas, ${customer.name}!*\n\nTu opinión es vital para nuestro equipo Spartan. ¿Nos apoyarías dejando tu reseña en Google Maps con este enlace directo?\n👉 ${reviewUrl}\n\n¡A seguir entrenando con todo! 💪 *TITANUS GYM*`
+          `⭐ *¡Muchísimas gracias por tus 5 Estrellas, ${customer.name}!*\n\nTu opinión es vital para nuestro equipo en ${tenant.name}. ¿Nos apoyarías dejando tu reseña en Google Maps con este enlace directo?\n👉 ${reviewUrl}\n\n¡A seguir entrenando con todo! 💪 *${tenant.name.toUpperCase()}*`,
+          evoInstance
         )
       } else {
         await sendWhatsAppMessage(
           phone,
-          `🙏 *Gracias por tu feedback sincero, ${customer.name}.*\n\nEn Titanus queremos mejorar siempre. ¿Tienes alguna sugerencia o comentario sobre tu entrenamiento? Responde a este mensaje y la administración lo revisará.`
+          `🙏 *Gracias por tu feedback sincero, ${customer.name}.*\n\nEn ${tenant.name} queremos mejorar siempre. ¿Tienes alguna sugerencia o comentario sobre tu entrenamiento? Responde a este mensaje y la administración lo revisará.`,
+          evoInstance
         )
       }
       return NextResponse.json({ status: 'evaluation_recorded', stars })
@@ -227,7 +256,8 @@ export async function POST(req: Request) {
 
         await sendWhatsAppMessage(
           phone,
-          `✅ *Plan Seleccionado: ${chosenPlan.name}*\n\n💵 Monto a pagar en caja: *$${amount.toFixed(2)} USD*\n🎁 Cashback que ganarás: *+$${cashbackAmt.toFixed(2)} USD* (${cashbackPct}%)\n💰 Saldo actual en tu Monedero: *$${currentBalance.toFixed(2)} USD*\n\n🔔 *Acércate a recepción para cancelar.* Una vez que el staff apruebe tu pago en el monitor, tu saldo de cashback se acreditará automáticamente.`
+          `✅ *Plan Seleccionado: ${chosenPlan.name}*\n\n💵 Monto a pagar en caja: *$${amount.toFixed(2)} USD*\n🎁 Cashback que ganarás: *+$${cashbackAmt.toFixed(2)} USD* (${cashbackPct}%)\n💰 Saldo actual en tu Monedero: *$${currentBalance.toFixed(2)} USD*\n\n🔔 *Acércate a recepción para cancelar.* Una vez que el staff apruebe tu pago en el monitor, tu saldo de cashback se acreditará automáticamente.`,
+          evoInstance
         )
         return NextResponse.json({ status: 'plan_payment_queued', plan: chosenPlan.name })
       }
@@ -257,7 +287,8 @@ export async function POST(req: Request) {
     if (!validQr) {
       await sendWhatsAppMessage(
         phone,
-        `⚠️ *Código QR no válido o ya utilizado*\n\nEste código ya fue consumido o su tiempo de escaneo expiró. Por favor vuelve a escanear el cartel oficial en el gimnasio.`
+        `⚠️ *Código QR no válido o ya utilizado*\n\nEste código ya fue consumido o su tiempo de escaneo expiró. Por favor vuelve a escanear el cartel oficial en el gimnasio.`,
+        evoInstance
       )
       return NextResponse.json({ status: 'qr_expired_or_invalid' })
     }
@@ -275,18 +306,22 @@ export async function POST(req: Request) {
       })
 
       if (coaches.length === 0) {
-        await sendWhatsAppMessage(phone, `❌ No hay entrenadores registrados aún en el sistema. Consulta en recepción.`)
+        await sendWhatsAppMessage(
+          phone,
+          `❌ No hay entrenadores registrados aún en el sistema. Consulta en recepción.`,
+          evoInstance
+        )
         return NextResponse.json({ status: 'no_coaches' })
       }
 
-      let msg = `🏋️ *CALIFICA A TU ENTRENADOR - TITANUS GYM*\n\n`
+      let msg = `🏋️ *CALIFICA A TU ENTRENADOR - ${tenant.name.toUpperCase()}*\n\n`
       msg += `Responde con el *número* del coach que deseas calificar:\n\n`
       coaches.forEach((c, idx) => {
         msg += `*${idx + 1}.* ${c.name}\n`
       })
       msg += `\n_Ejemplo: Responde *1* para el primer entrenador._`
 
-      await sendWhatsAppMessage(phone, msg)
+      await sendWhatsAppMessage(phone, msg, evoInstance)
 
       await prisma.qrToken.deleteMany({
         where: { tenantId: tenant.id, token: { startsWith: `EVAL_COACH_SEL_${phone}` } },
@@ -312,7 +347,7 @@ export async function POST(req: Request) {
         orderBy: { price: 'asc' },
       })
 
-      let msg = `📋 *PLANES DE MENSUALIDAD - TITANUS GYM*\n\n`
+      let msg = `📋 *PLANES DE MENSUALIDAD - ${tenant.name.toUpperCase()}*\n\n`
       msg += `Hola *${customer.name}*! Responde con el *número* del plan que deseas abonar:\n\n`
 
       plans.forEach((p, idx) => {
@@ -321,7 +356,7 @@ export async function POST(req: Request) {
       })
       msg += `_Responde con el número de tu plan (ej: *1* o *2*)._`
 
-      await sendWhatsAppMessage(phone, msg)
+      await sendWhatsAppMessage(phone, msg, evoInstance)
 
       await prisma.qrToken.deleteMany({
         where: { tenantId: tenant.id, token: { startsWith: `PLAN_SEL_${phone}` } },
@@ -360,7 +395,8 @@ export async function POST(req: Request) {
 
       await sendWhatsAppMessage(
         phone,
-        `🥤 *COMPRA EN BARRA REGISTRADA*\n\nHola *${customer.name}*!\n\nTu consumo fue enviado al monitor de recepción. El staff confirmará el monto de tus productos y una vez aprobado, se acreditará tu *${cashbackPct}% de Cashback* a tu Billetera Digital.\n\n💰 Saldo actual: *$${currentBalance.toFixed(2)} USD*`
+        `🥤 *COMPRA EN BARRA REGISTRADA*\n\nHola *${customer.name}*!\n\nTu consumo fue enviado al monitor de recepción. El staff confirmará el monto de tus productos y una vez aprobado, se acreditará tu *${cashbackPct}% de Cashback* a tu Billetera Digital.\n\n💰 Saldo actual: *$${currentBalance.toFixed(2)} USD*`,
+        evoInstance
       )
 
       return NextResponse.json({ status: 'retail_queued' })

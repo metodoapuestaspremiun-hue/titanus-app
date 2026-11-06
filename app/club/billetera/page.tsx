@@ -1,26 +1,23 @@
 'use client'
 
 import React, { useState, useEffect, useMemo } from 'react'
+import Image from 'next/image'
 import {
   Wallet,
   Sparkles,
   RefreshCw,
   Search,
-  Filter,
   Users,
   DollarSign,
   ArrowDownLeft,
   ArrowUpRight,
   ChevronRight,
-  ChevronLeft,
   X,
   Clock,
-  CheckCircle2,
-  Receipt,
-  Calendar,
   ListFilter
 } from 'lucide-react'
 import axios from 'axios'
+import { action_membership_jpg, action_bar_jpg, action_coach_jpg } from '@/lib/brandingImages'
 
 export default function WalletAudit() {
   const [data, setData] = useState<any>({ totalBalance: 0, redeemed: 0, customers: [] })
@@ -35,6 +32,9 @@ export default function WalletAudit() {
   const [customerHistory, setCustomerHistory] = useState<any>(null)
   const [loadingHistory, setLoadingHistory] = useState(false)
   const [historyPage, setHistoryPage] = useState(1)
+
+  // Expandir listado de clientes
+  const [showAllCustomers, setShowAllCustomers] = useState(false)
 
   // Filtros del historial de movimientos
   const [txTypeFilter, setTxTypeFilter] = useState('ALL')
@@ -114,8 +114,8 @@ export default function WalletAudit() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-black tracking-tight text-white flex items-center gap-2">
-            BILLETERA SPARTAN & MONEDERO DIGITAL
-            <Wallet className="w-7 h-7 text-[#FCDD09]" />
+            BILLETERA & MONEDERO DIGITAL
+            <Wallet className="w-7 h-7" style={{ color: 'var(--color-primary, #00F5D4)' }} />
           </h1>
           <p className="text-sm text-zinc-400 mt-1">
             Auditoría, canjes de saldo y trazabilidad completa de clientes. Haz clic en un socio para ver su historial.
@@ -124,55 +124,106 @@ export default function WalletAudit() {
 
         <button
           onClick={fetchWalletData}
-          className="p-2.5 rounded-xl bg-zinc-900 border border-white/10 hover:border-[#FCDD09] transition-all text-zinc-400 hover:text-white self-start sm:self-auto"
+          className="p-2.5 rounded-xl bg-[var(--bg-card,#05101C)] border border-[var(--border-card,rgba(0,245,212,0.15))] transition-all text-zinc-400 hover:text-white self-start sm:self-auto"
         >
-          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-[#FCDD09]' : ''}`} />
+          <RefreshCw
+            className="w-4 h-4"
+            style={{ color: loading ? 'var(--color-primary, #00F5D4)' : undefined }}
+          />
         </button>
       </div>
 
-      {/* Métricas Globales */}
+      {/* Métricas Globales con Acciones Visuales Tácticas */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="p-6 rounded-2xl bg-zinc-950 border border-[#FCDD09]/40">
-          <span className="text-xs font-bold uppercase text-zinc-400 tracking-wider">
-            Total en Monederos Circulante
-          </span>
-          <div className="text-3xl font-black text-[#FCDD09] mt-2">
-            ${data.totalBalance.toFixed(2)} USD
+        <div className="rounded-2xl bg-[var(--bg-card,#05101C)] border border-[var(--border-card,rgba(0,245,212,0.15))] relative overflow-hidden group transition-all flex flex-col justify-between shadow-xl">
+          <div className="relative h-28 w-full overflow-hidden">
+            <Image
+              src={action_membership_jpg}
+              alt="Circulante"
+              fill
+              unoptimized
+              className="object-cover group-hover:scale-105 transition-transform duration-500 opacity-60"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-[var(--bg-card,#05101C)] via-[var(--bg-card,#05101C)]/60 to-transparent" />
+            <div className="absolute top-3 left-3 w-8 h-8 rounded-lg bg-black/60 flex items-center justify-center border border-white/10">
+              <DollarSign className="w-4 h-4" style={{ color: 'var(--color-primary, #00F5D4)' }} />
+            </div>
           </div>
-          <span className="text-xs text-zinc-500 mt-1 block">Saldo listo para canje</span>
+          <div className="p-5 pt-0">
+            <span className="text-xs font-bold uppercase text-zinc-400 tracking-wider">
+              Total en Monederos Circulante
+            </span>
+            <div className="text-3xl font-black mt-2 font-number" style={{ color: 'var(--color-primary, #00F5D4)' }}>
+              ${data.totalBalance.toFixed(2)} USD
+            </div>
+            <span className="text-xs text-zinc-500 mt-1 block">Saldo listo para canje</span>
+          </div>
         </div>
 
-        <div className="p-6 rounded-2xl bg-zinc-950 border border-white/10">
-          <span className="text-xs font-bold uppercase text-zinc-400 tracking-wider">
-            Total Descontado en Canjes
-          </span>
-          <div className="text-3xl font-black text-white mt-2">
-            ${data.redeemed.toFixed(2)} USD
+        <div className="rounded-2xl bg-[var(--bg-card,#05101C)] border border-[var(--border-card,rgba(0,245,212,0.15))] relative overflow-hidden group transition-all flex flex-col justify-between shadow-xl">
+          <div className="relative h-28 w-full overflow-hidden">
+            <Image
+              src={action_bar_jpg}
+              alt="Canjes"
+              fill
+              unoptimized
+              className="object-cover group-hover:scale-105 transition-transform duration-500 opacity-60"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-[var(--bg-card,#05101C)] via-[var(--bg-card,#05101C)]/60 to-transparent" />
+            <div className="absolute top-3 left-3 w-8 h-8 rounded-lg bg-black/60 flex items-center justify-center border border-white/10">
+              <ArrowDownLeft className="w-4 h-4 text-emerald-400" />
+            </div>
           </div>
-          <span className="text-xs text-zinc-500 mt-1 block">Ahorro real entregado en mostrador</span>
+          <div className="p-5 pt-0">
+            <span className="text-xs font-bold uppercase text-zinc-400 tracking-wider">
+              Total Descontado en Canjes
+            </span>
+            <div className="text-3xl font-black text-white mt-2 font-number">
+              ${data.redeemed.toFixed(2)} USD
+            </div>
+            <span className="text-xs text-zinc-500 mt-1 block">Ahorro real entregado en mostrador</span>
+          </div>
         </div>
 
-        <div className="p-6 rounded-2xl bg-zinc-950 border border-white/10">
-          <span className="text-xs font-bold uppercase text-zinc-400 tracking-wider">
-            Total Clientes Registrados
-          </span>
-          <div className="text-3xl font-black text-[#FCDD09] mt-2">
-            {data.customers.length}
+        <div className="rounded-2xl bg-[var(--bg-card,#05101C)] border border-[var(--border-card,rgba(0,245,212,0.15))] relative overflow-hidden group transition-all flex flex-col justify-between shadow-xl">
+          <div className="relative h-28 w-full overflow-hidden">
+            <Image
+              src={action_coach_jpg}
+              alt="Socios"
+              fill
+              unoptimized
+              className="object-cover group-hover:scale-105 transition-transform duration-500 opacity-60"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-[var(--bg-card,#05101C)] via-[var(--bg-card,#05101C)]/60 to-transparent" />
+            <div className="absolute top-3 left-3 w-8 h-8 rounded-lg bg-black/60 flex items-center justify-center border border-white/10">
+              <Users className="w-4 h-4" style={{ color: 'var(--color-primary, #00F5D4)' }} />
+            </div>
           </div>
-          <span className="text-xs text-zinc-500 mt-1 block">Socios con monedero activo</span>
+          <div className="p-5 pt-0">
+            <span className="text-xs font-bold uppercase text-zinc-400 tracking-wider">
+              Total Clientes Registrados
+            </span>
+            <div className="text-3xl font-black mt-2 font-number" style={{ color: 'var(--color-primary, #00F5D4)' }}>
+              {data.customers.length}
+            </div>
+            <span className="text-xs text-zinc-500 mt-1 block">Socios con monedero activo</span>
+          </div>
         </div>
       </div>
 
       {/* Directorio de Clientes con Filtros Tácticos */}
-      <div className="bg-zinc-950 border border-white/10 rounded-2xl p-6 space-y-6">
+      <div className="bg-[var(--bg-card,#05101C)] border border-[var(--border-card,rgba(0,245,212,0.15))] rounded-2xl p-6 space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-4">
           <div>
             <h2 className="text-lg font-bold text-white flex items-center gap-2">
-              <Users className="w-5 h-5 text-[#FCDD09]" />
+              <Users className="w-5 h-5" style={{ color: 'var(--color-primary, #00F5D4)' }} />
               Directorio de Billeteras
             </h2>
             <span className="text-xs text-zinc-400">
-              Mostrando {filteredCustomers.length} cliente(s) &bull; Subtotal filtrado: <span className="font-bold text-[#FCDD09]">${totalFiltrado.toFixed(2)} USD</span>
+              Mostrando {filteredCustomers.length} cliente(s) &bull; Subtotal filtrado:{' '}
+              <span className="font-bold" style={{ color: 'var(--color-primary, #00F5D4)' }}>
+                ${totalFiltrado.toFixed(2)} USD
+              </span>
             </span>
           </div>
 
@@ -185,7 +236,7 @@ export default function WalletAudit() {
                 placeholder="Buscar por nombre o número..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-zinc-900 border border-white/10 rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-[#FCDD09]"
+                className="w-full pl-10 pr-4 py-2 bg-zinc-900 border border-white/10 rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none"
               />
             </div>
 
@@ -193,7 +244,7 @@ export default function WalletAudit() {
             <select
               value={balanceFilter}
               onChange={(e: any) => setBalanceFilter(e.target.value)}
-              className="bg-zinc-900 border border-white/10 text-xs text-white rounded-xl px-3 py-2 focus:outline-none focus:border-[#FCDD09] w-full sm:w-auto"
+              className="bg-zinc-900 border border-white/10 text-xs text-white rounded-xl px-3 py-2 focus:outline-none w-full sm:w-auto"
             >
               <option value="ALL">Todos los Saldos</option>
               <option value="WITH_BALANCE">Con Saldo Disponible (&gt; $0)</option>
@@ -208,38 +259,63 @@ export default function WalletAudit() {
             No se encontraron clientes que coincidan con la búsqueda.
           </div>
         ) : (
-          <div className="divide-y divide-white/10">
-            {filteredCustomers.map((c: any) => (
-              <div
-                key={c.id}
-                onClick={() => openCustomerHistory(c.id)}
-                className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-white/5 px-4 rounded-xl transition-all cursor-pointer group"
-              >
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-full bg-zinc-900 flex items-center justify-center font-bold text-[#FCDD09] border border-[#FCDD09]/30 group-hover:border-[#FCDD09] group-hover:scale-105 transition-all">
-                    {c.name.charAt(0)}
+          <div className="space-y-0">
+            <div className="divide-y divide-white/10">
+              {(showAllCustomers ? filteredCustomers : filteredCustomers.slice(0, 5)).map((c: any) => (
+                <div
+                  key={c.id}
+                  onClick={() => openCustomerHistory(c.id)}
+                  className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-white/5 px-4 rounded-xl transition-all cursor-pointer group"
+                >
+                  <div className="flex items-center gap-4">
+                    <div
+                      className="w-10 h-10 rounded-full bg-zinc-900 flex items-center justify-center font-bold border transition-all"
+                      style={{
+                        color: 'var(--color-primary, #00F5D4)',
+                        borderColor: 'color-mix(in srgb, var(--color-primary, #00F5D4) 30%, transparent)'
+                      }}
+                    >
+                      {c.name.charAt(0)}
+                    </div>
+                    <div>
+                      <span className="font-bold text-white text-sm block group-hover:text-[var(--color-primary,#00F5D4)] transition-colors">
+                        {c.name}
+                      </span>
+                      <span className="text-xs text-zinc-400 font-mono">+{c.phone}</span>
+                    </div>
                   </div>
-                  <div>
-                    <span className="font-bold text-white text-sm block group-hover:text-[#FCDD09] transition-colors">
-                      {c.name}
-                    </span>
-                    <span className="text-xs text-zinc-400 font-mono">+{c.phone}</span>
-                  </div>
-                </div>
 
-                <div className="flex items-center gap-4 self-end sm:self-auto">
-                  <div className="text-right">
-                    <span className="text-lg font-black text-[#FCDD09]">
-                      ${c.balance.toFixed(2)} USD
-                    </span>
-                    <span className="block text-[11px] text-zinc-500">Saldo monedero</span>
-                  </div>
-                  <div className="p-2 rounded-lg bg-zinc-900 border border-white/10 text-zinc-400 group-hover:text-[#FCDD09] group-hover:border-[#FCDD09]/40 transition-all">
-                    <ChevronRight className="w-4 h-4" />
+                  <div className="flex items-center gap-4 self-end sm:self-auto">
+                    <div className="text-right">
+                      <span className="text-lg font-black" style={{ color: 'var(--color-primary, #00F5D4)' }}>
+                        ${c.balance.toFixed(2)} USD
+                      </span>
+                      <span className="block text-[11px] text-zinc-500">Saldo monedero</span>
+                    </div>
+                    <div className="p-2 rounded-lg bg-zinc-900 border border-white/10 text-zinc-400 group-hover:text-[var(--color-primary,#00F5D4)] transition-all">
+                      <ChevronRight className="w-4 h-4" />
+                    </div>
                   </div>
                 </div>
+              ))}
+            </div>
+
+            {filteredCustomers.length > 5 && (
+              <div className="pt-4 flex justify-center">
+                <button
+                  onClick={() => setShowAllCustomers(!showAllCustomers)}
+                  className="px-6 py-2.5 rounded-xl border text-sm font-bold transition-all hover:bg-white/5"
+                  style={{
+                    color: 'var(--color-primary, #00F5D4)',
+                    borderColor: 'color-mix(in srgb, var(--color-primary, #00F5D4) 30%, transparent)'
+                  }}
+                >
+                  {showAllCustomers
+                    ? `▲ Mostrar solo 5`
+                    : `▼ Ver todos (${filteredCustomers.length} clientes)`}
+                </button>
               </div>
-            ))}
+            )}
           </div>
         )}
       </div>
@@ -247,12 +323,15 @@ export default function WalletAudit() {
       {/* Drawer Lateral: Historial y Movimientos del Cliente */}
       {selectedCustomerId && (
         <div className="fixed inset-0 z-50 flex justify-end bg-black/75 backdrop-blur-xs transition-opacity animate-in fade-in">
-          <div className="w-full max-w-lg bg-black border-l border-white/10 h-full flex flex-col shadow-2xl">
+          <div className="w-full max-w-lg bg-[var(--bg-app,#03080F)] border-l border-[var(--border-card,rgba(0,245,212,0.15))] h-full flex flex-col shadow-2xl">
             {/* Header fijo */}
             <div className="p-6 border-b border-white/10 flex-shrink-0">
               <div className="flex items-center justify-between">
                 <div>
-                  <span className="text-[10px] uppercase font-bold text-[#FCDD09] tracking-widest block mb-0.5">
+                  <span
+                    className="text-[10px] uppercase font-bold tracking-widest block mb-0.5"
+                    style={{ color: 'var(--color-primary, #00F5D4)' }}
+                  >
                     Historial de Monedero
                   </span>
                   <h3 className="text-xl font-black text-white">
@@ -272,15 +351,24 @@ export default function WalletAudit() {
 
               {/* Tarjeta de Saldo */}
               {customerHistory && (
-                <div className="mt-4 p-4 rounded-2xl bg-zinc-950 border border-[#FCDD09]/40 flex items-center justify-between">
+                <div
+                  className="mt-4 p-4 rounded-2xl bg-[var(--bg-card,#05101C)] border flex items-center justify-between"
+                  style={{ borderColor: 'color-mix(in srgb, var(--color-primary, #00F5D4) 40%, transparent)' }}
+                >
                   <div>
                     <span className="text-xs text-zinc-400 font-medium block">Saldo Disponible</span>
-                    <span className="text-2xl font-black text-[#FCDD09]">
+                    <span className="text-2xl font-black" style={{ color: 'var(--color-primary, #00F5D4)' }}>
                       ${customerHistory.customer.balance.toFixed(2)} USD
                     </span>
                   </div>
-                  <div className="w-10 h-10 rounded-xl bg-[#FCDD09]/10 border border-[#FCDD09]/30 flex items-center justify-center">
-                    <Sparkles className="w-5 h-5 text-[#FCDD09]" />
+                  <div
+                    className="w-10 h-10 rounded-xl flex items-center justify-center border"
+                    style={{
+                      backgroundColor: 'color-mix(in srgb, var(--color-primary, #00F5D4) 15%, transparent)',
+                      borderColor: 'color-mix(in srgb, var(--color-primary, #00F5D4) 30%, transparent)'
+                    }}
+                  >
+                    <Sparkles className="w-5 h-5" style={{ color: 'var(--color-primary, #00F5D4)' }} />
                   </div>
                 </div>
               )}
@@ -290,7 +378,7 @@ export default function WalletAudit() {
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
               {loadingHistory && !customerHistory ? (
                 <div className="py-20 text-center text-zinc-500 flex flex-col items-center gap-3">
-                  <RefreshCw className="w-6 h-6 animate-spin text-[#FCDD09]" />
+                  <RefreshCw className="w-6 h-6 animate-spin" style={{ color: 'var(--color-primary, #00F5D4)' }} />
                   <span className="text-sm">Cargando movimientos...</span>
                 </div>
               ) : customerHistory ? (
@@ -298,7 +386,7 @@ export default function WalletAudit() {
                   {/* Filtros de Movimientos */}
                   <div>
                     <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                      <ListFilter className="w-4 h-4 text-[#FCDD09]" />
+                      <ListFilter className="w-4 h-4" style={{ color: 'var(--color-primary, #00F5D4)' }} />
                       Movimientos del Monedero
                       <span className="ml-auto text-zinc-500 font-normal normal-case">
                         {customerHistory.pagination?.total || 0} en total
@@ -313,9 +401,13 @@ export default function WalletAudit() {
                           onClick={() => openCustomerHistory(selectedCustomerId!, 1, t, txDateFrom, txDateTo)}
                           className={`px-3 py-1 rounded-lg text-xs font-bold border transition-all ${
                             txTypeFilter === t
-                              ? 'bg-[#FCDD09] text-black border-[#FCDD09]'
-                              : 'bg-zinc-900 text-zinc-400 border-white/10 hover:border-[#FCDD09]/40'
+                              ? 'text-black border-transparent'
+                              : 'bg-zinc-900 text-zinc-400 border-white/10 hover:border-white/30'
                           }`}
+                          style={{
+                            backgroundColor: txTypeFilter === t ? 'var(--color-primary, #00F5D4)' : undefined,
+                            color: txTypeFilter === t ? '#000000' : undefined
+                          }}
                         >
                           {t === 'ALL' ? 'Todos' : t === 'CASHBACK_EARNED' ? '+ Cashback' : '- Canjes'}
                         </button>
@@ -330,7 +422,7 @@ export default function WalletAudit() {
                           type="date"
                           value={txDateFrom}
                           onChange={(e) => { setTxDateFrom(e.target.value); openCustomerHistory(selectedCustomerId!, 1, txTypeFilter, e.target.value, txDateTo) }}
-                          className="w-full px-3 py-1.5 bg-zinc-900 border border-white/10 rounded-lg text-xs text-white focus:outline-none focus:border-[#FCDD09]"
+                          className="w-full px-3 py-1.5 bg-zinc-900 border border-white/10 rounded-lg text-xs text-white focus:outline-none"
                         />
                       </div>
                       <div className="flex-1">
@@ -339,7 +431,7 @@ export default function WalletAudit() {
                           type="date"
                           value={txDateTo}
                           onChange={(e) => { setTxDateTo(e.target.value); openCustomerHistory(selectedCustomerId!, 1, txTypeFilter, txDateFrom, e.target.value) }}
-                          className="w-full px-3 py-1.5 bg-zinc-900 border border-white/10 rounded-lg text-xs text-white focus:outline-none focus:border-[#FCDD09]"
+                          className="w-full px-3 py-1.5 bg-zinc-900 border border-white/10 rounded-lg text-xs text-white focus:outline-none"
                         />
                       </div>
                       {(txDateFrom || txDateTo) && (
@@ -391,7 +483,7 @@ export default function WalletAudit() {
                                   <span className="text-[10px] text-zinc-500 flex items-center gap-1 mt-0.5">
                                     <Clock className="w-3 h-3" />
                                     {new Date(tx.createdAt).toLocaleDateString('es-EC', {
-                                      day: '2-digit', month: 'short', year: 'numeric',
+                                       day: '2-digit', month: 'short', year: 'numeric',
                                       hour: '2-digit', minute: '2-digit',
                                     })}
                                   </span>
@@ -416,14 +508,14 @@ export default function WalletAudit() {
                           <button
                             disabled={historyPage <= 1 || loadingHistory}
                             onClick={() => openCustomerHistory(selectedCustomerId!, historyPage - 1, txTypeFilter, txDateFrom, txDateTo)}
-                            className="px-3 py-1 rounded-lg bg-zinc-900 border border-white/10 disabled:opacity-30 hover:border-[#FCDD09]/40"
+                            className="px-3 py-1 rounded-lg bg-zinc-900 border border-white/10 disabled:opacity-30"
                           >
                             ← Anterior
                           </button>
                           <button
                             disabled={historyPage >= customerHistory.pagination.pages || loadingHistory}
                             onClick={() => openCustomerHistory(selectedCustomerId!, historyPage + 1, txTypeFilter, txDateFrom, txDateTo)}
-                            className="px-3 py-1 rounded-lg bg-zinc-900 border border-white/10 disabled:opacity-30 hover:border-[#FCDD09]/40"
+                            className="px-3 py-1 rounded-lg bg-zinc-900 border border-white/10 disabled:opacity-30"
                           >
                             Siguiente →
                           </button>
@@ -435,7 +527,7 @@ export default function WalletAudit() {
                   {/* Historial de Pagos / Compras */}
                   <div>
                     <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                      <DollarSign className="w-4 h-4 text-[#FCDD09]" />
+                      <DollarSign className="w-4 h-4" style={{ color: 'var(--color-primary, #00F5D4)' }} />
                       Consumos Registrados ({customerHistory.payments.length})
                     </h4>
 
@@ -481,7 +573,7 @@ export default function WalletAudit() {
 
             {/* Footer fijo */}
             <div className="p-4 border-t border-white/10 text-center flex-shrink-0">
-              <span className="text-xs text-zinc-500">TITANUS SYSTEM &bull; Trazabilidad de Billetera</span>
+              <span className="text-xs text-zinc-500">Trazabilidad de Billetera</span>
             </div>
           </div>
         </div>

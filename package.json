@@ -27,6 +27,7 @@
     "qrcode.react": "^4.2.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
+    "sharp": "^0.35.5",
     "tailwind-merge": "^3.4.0",
     "xlsx": "^0.18.5"
   },
@@ -41,5 +42,8 @@
     "eslint-config-next": "16.1.1",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "prisma": {
+    "seed": "npx tsx prisma/seed.ts"
   }
 }

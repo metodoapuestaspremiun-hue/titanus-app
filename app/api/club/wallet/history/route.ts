@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { getTenantFromRequest } from '@/lib/getTenant'
 
 // GET /api/club/wallet/history?customerId=...&page=1&pageSize=20&type=ALL&dateFrom=&dateTo=
 export async function GET(req: Request) {
   try {
+    const { tenantId } = await getTenantFromRequest(req)
     const { searchParams } = new URL(req.url)
     const customerId = searchParams.get('customerId')
     const page = Math.max(1, parseInt(searchParams.get('page') || '1'))
@@ -16,22 +18,19 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'customerId requerido' }, { status: 400 })
     }
 
-    const tenant = await prisma.tenant.findUnique({ where: { slug: 'titanus-gym' } })
-    if (!tenant) return NextResponse.json({ error: 'Tenant no configurado' }, { status: 400 })
-
-    const customer = await prisma.customer.findUnique({
-      where: { id: customerId },
-      include: { wallets: true },
+    const customer = await prisma.customer.findFirst({
+      where: { id: customerId, tenantId },
+      include: { wallets: { where: { tenantId } } },
     })
 
     if (!customer) {
-      return NextResponse.json({ error: 'Cliente no encontrado' }, { status: 404 })
+      return NextResponse.json({ error: 'Cliente no encontrado o no pertenece a su club' }, { status: 404 })
     }
 
     const wallet = customer.wallets[0]
 
-    // Construir filtros de transacciones
-    const txWhere: any = { walletId: wallet?.id }
+    // Construir filtros de transacciones respetando tenantId
+    const txWhere: any = { walletId: wallet?.id, tenantId }
     if (typeFilter !== 'ALL') txWhere.type = typeFilter
     if (dateFrom || dateTo) {
       txWhere.createdAt = {}
@@ -43,17 +42,19 @@ export async function GET(req: Request) {
       }
     }
 
-    const totalTx = await prisma.walletTransaction.count({ where: txWhere })
-    const transactions = await prisma.walletTransaction.findMany({
-      where: txWhere,
-      orderBy: { createdAt: 'desc' },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-    })
+    const totalTx = wallet?.id ? await prisma.walletTransaction.count({ where: txWhere }) : 0
+    const transactions = wallet?.id
+      ? await prisma.walletTransaction.findMany({
+          where: txWhere,
+          orderBy: { createdAt: 'desc' },
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+        })
+      : []
 
-    // Pagos asociados (siempre últimos 20, sin paginar)
+    // Pagos asociados para este cliente y tenant
     const payments = await prisma.payment.findMany({
-      where: { customerId },
+      where: { customerId, tenantId },
       orderBy: { createdAt: 'desc' },
       take: 20,
     })
@@ -90,7 +91,7 @@ export async function GET(req: Request) {
       })),
     })
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    const status = error?.status || 500
+    return NextResponse.json({ error: error.message }, { status })
   }
 }
-

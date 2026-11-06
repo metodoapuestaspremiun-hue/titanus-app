@@ -5,11 +5,27 @@
   --color-spartan-black: #000000;
   --color-spartan-charcoal: #1A1A1A;
   --color-spartan-gold: #E5C100;
+  --color-brand-cyan: #00F5D4;
+  --color-brand-teal: #00E5FF;
+  --color-brand-gold: #F59E0B;
+  --color-brand-dark: #03080F;
+  --color-brand-card: #05101C;
 }
 
 :root {
-  --background: #000000;
-  --foreground: #ffffff;
+  /* Default ALL-CRM Design System Tokens */
+  --bg-app: #03080F;
+  --bg-card: #05101C;
+  --border-card: rgba(0, 245, 212, 0.15);
+  --text-main: #FFFFFF;
+  --text-muted: #8AA4C4;
+
+  /* Colores Dinámicos de Marca (mutan según el Tenant o caen en ALL-CRM Cyan) */
+  --color-primary: #00F5D4;
+  --color-secondary: #00E5FF;
+  --accent-gold: #F59E0B;
+  --background: #03080F;
+  --foreground: #FFFFFF;
 }
 
 body {
@@ -18,12 +34,38 @@ body {
   font-feature-settings: "rlig" 1, "calt" 1;
 }
 
+/* Clases de Utilidad de Tema Adaptativo */
+.theme-primary-bg {
+  background-color: var(--color-primary, #00F5D4) !important;
+}
+
+.theme-primary-text {
+  color: var(--color-primary, #00F5D4) !important;
+}
+
+.theme-primary-border {
+  border-color: var(--color-primary, #00F5D4) !important;
+}
+
 .spartan-gradient {
-  background: linear-gradient(135deg, #FCDD09 0%, #E5C100 100%);
+  background: linear-gradient(135deg, var(--color-primary, #00F5D4) 0%, var(--color-secondary, #00E5FF) 100%);
 }
 
 .glass-card {
-  background-color: color-mix(in srgb, var(--color-spartan-charcoal) 50%, transparent);
+  background-color: var(--bg-card, #05101C);
   backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--border-card, rgba(0, 245, 212, 0.15));
+}
+
+.tactical-card {
+  background: var(--bg-card, #05101C);
+  border: 1px solid var(--border-card, rgba(0, 245, 212, 0.15));
+  border-radius: 1rem;
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+}
+
+.text-gradient-cyan {
+  background: linear-gradient(135deg, var(--color-primary, #00F5D4) 0%, var(--color-secondary, #00E5FF) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }

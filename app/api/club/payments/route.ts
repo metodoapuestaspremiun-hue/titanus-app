@@ -1,15 +1,15 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { sendWhatsAppMessage } from '@/lib/evolution'
+import { getTenantFromRequest } from '@/lib/getTenant'
 
-// GET: Lista pagos pendientes en caja
-export async function GET() {
+// GET: Lista pagos pendientes en caja para el tenant autenticado
+export async function GET(req: Request) {
   try {
-    const tenant = await prisma.tenant.findUnique({ where: { slug: 'titanus-gym' } })
-    if (!tenant) return NextResponse.json({ payments: [] })
+    const { tenantId } = await getTenantFromRequest(req)
 
     const payments = await prisma.payment.findMany({
-      where: { tenantId: tenant.id, status: 'PENDING' },
+      where: { tenantId, status: 'PENDING' },
       include: {
         customer: { include: { wallets: true } },
       },
@@ -18,26 +18,30 @@ export async function GET() {
 
     return NextResponse.json({ payments })
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    const status = error?.status || 500
+    return NextResponse.json({ error: error.message }, { status })
   }
 }
 
 // POST: Aprobar o rechazar un pago y acreditar cashback a la Wallet
 export async function POST(req: Request) {
   try {
+    const { tenantId } = await getTenantFromRequest(req)
     const { paymentId, action, finalAmount, productDescription } = await req.json()
     // action: 'APPROVE' | 'REJECT'
     // finalAmount: opcional, para cuando recepción edita el monto de retail
 
-    const payment = await prisma.payment.findUnique({
-      where: { id: paymentId },
+    const payment = await prisma.payment.findFirst({
+      where: { id: paymentId, tenantId },
       include: {
         customer: { include: { wallets: true } },
         tenant: true,
       },
     })
 
-    if (!payment) return NextResponse.json({ error: 'Pago no encontrado' }, { status: 404 })
+    if (!payment) return NextResponse.json({ error: 'Pago no encontrado o no pertenece a su club' }, { status: 404 })
+
+    const instanceName = payment.tenant.evolutionInstanceName
 
     if (action === 'REJECT') {
       await prisma.payment.update({
@@ -46,7 +50,8 @@ export async function POST(req: Request) {
       })
       await sendWhatsAppMessage(
         payment.customer.phone,
-        `❌ *${payment.tenant.name}*\n\nTu solicitud de pago no fue aprobada. Por favor acércate a recepción para más información.`
+        `❌ *${payment.tenant.name}*\n\nTu solicitud de pago no fue aprobada. Por favor acércate a recepción para más información.`,
+        instanceName
       )
       return NextResponse.json({ success: true, status: 'REJECTED' })
     }
@@ -108,12 +113,14 @@ export async function POST(req: Request) {
     const prodLine = productDescription ? `\n📦 Producto: *${productDescription}*` : ''
     await sendWhatsAppMessage(
       payment.customer.phone,
-      `✅ *¡Pago Aprobado en Caja, Spartan!*\n\n🏋️ *${payment.tenant.name}*\n\n💵 ${tipo.charAt(0).toUpperCase() + tipo.slice(1)}: *$${amount.toFixed(2)} USD*${prodLine}\n🎁 Cashback acreditado: *+$${cashbackAmt.toFixed(2)} USD* (${cashbackPct}%)\n💰 Tu nuevo saldo en Monedero: *$${result.newBalance.toFixed(2)} USD*\n\n¡Gracias por confiar en Titanus! Puedes canjear tu saldo en tu próxima visita. 💪`
+      `✅ *¡Pago Aprobado en Caja!*\n\n🏋️ *${payment.tenant.name}*\n\n💵 ${tipo.charAt(0).toUpperCase() + tipo.slice(1)}: *$${amount.toFixed(2)} USD*${prodLine}\n🎁 Cashback acreditado: *+$${cashbackAmt.toFixed(2)} USD* (${cashbackPct}%)\n💰 Tu nuevo saldo en Monedero: *$${result.newBalance.toFixed(2)} USD*\n\n¡Gracias por tu visita! Puedes canjear tu saldo acumulado en recepción. 💪`,
+      instanceName
     )
 
     return NextResponse.json({ success: true, status: 'APPROVED', newBalance: result.newBalance })
   } catch (error: any) {
     console.error('Error al procesar aprobación de pago:', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    const status = error?.status || 500
+    return NextResponse.json({ error: error.message }, { status })
   }
 }

@@ -7,10 +7,15 @@ const EVOLUTION_INSTANCE = process.env.EVOLUTION_INSTANCE_NAME || 'gym_bot'
 /**
  * Envía un mensaje de texto mediante Evolution API v2 (formato directo { number, text })
  */
-export async function sendWhatsAppMessage(phone: string, text: string) {
+export async function sendWhatsAppMessage(
+  phone: string,
+  text: string,
+  instanceName?: string | null
+) {
   try {
     const cleanPhone = phone.replace(/[^0-9]/g, '')
-    const url = `${EVOLUTION_API_URL}/message/sendText/${EVOLUTION_INSTANCE}`
+    const instance = instanceName || EVOLUTION_INSTANCE
+    const url = `${EVOLUTION_API_URL}/message/sendText/${instance}`
 
     const response = await axios.post(
       url,

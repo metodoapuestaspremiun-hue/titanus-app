@@ -6,28 +6,30 @@ import ClubSidebar from "@/components/ClubSidebar";
 import TopHeaderSwitcher from "@/components/TopHeaderSwitcher";
 
 export default function ClientWrapper({ children }: { children: React.ReactNode }) {
-    const pathname = usePathname();
-    const isLoginPage = pathname === "/login";
-    const isClubModule = pathname?.startsWith("/club");
+  const pathname = usePathname();
+  const isLoginPage = pathname === "/login";
+  const isSuperAdmin = pathname?.startsWith("/superadmin");
+  const isClubModule = pathname?.startsWith("/club");
 
-    if (isLoginPage) {
-        return <>{children}</>;
-    }
+  if (isLoginPage || isSuperAdmin) {
+    return <>{children}</>;
+  }
 
-    return (
-        <div className="min-h-screen bg-black text-white flex flex-col">
-            {/* Header Global Switcher Spartan */}
-            <TopHeaderSwitcher />
+  // Para el módulo /club, ClubLayout se encarga de envolver con ThemeProvider (SSR)
+  // TopHeaderSwitcher y ClubSidebar deben estar DENTRO de ClubLayout para consumir useTheme()
+  if (isClubModule) {
+    return <>{children}</>;
+  }
 
-            <div className="flex flex-1">
-                {/* Sidebar Contextual según el software activo */}
-                {isClubModule ? <ClubSidebar /> : <Sidebar />}
-
-                {/* Contenido Principal */}
-                <main className="flex-1 min-h-[calc(100vh-4rem)] bg-zinc-950/60 overflow-y-auto">
-                    {children}
-                </main>
-            </div>
-        </div>
-    );
+  return (
+    <div className="min-h-screen bg-[var(--bg-app,#03080F)] text-white flex flex-col transition-colors duration-300">
+      <TopHeaderSwitcher />
+      <div className="flex flex-1 relative">
+        <Sidebar />
+        <main className="flex-1 min-w-0 bg-[var(--bg-app,#03080F)]/90">
+          {children}
+        </main>
+      </div>
+    </div>
+  );
 }

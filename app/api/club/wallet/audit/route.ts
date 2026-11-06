@@ -1,21 +1,21 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { getTenantFromRequest } from '@/lib/getTenant'
 
-// GET /api/club/wallet: Obtiene métricas globales de billetera y lista de socios con saldo
-export async function GET() {
+// GET /api/club/wallet/audit: Obtiene métricas globales de billetera y lista de socios con saldo para el tenant
+export async function GET(req: Request) {
   try {
-    const tenant = await prisma.tenant.findUnique({ where: { slug: 'titanus-gym' } })
-    if (!tenant) return NextResponse.json({ totalBalance: 0, redeemed: 0, customers: [] })
+    const { tenantId } = await getTenantFromRequest(req)
 
     const wallets = await prisma.wallet.findMany({
-      where: { tenantId: tenant.id },
+      where: { tenantId },
       include: {
         customer: true,
       },
     })
 
     const transactions = await prisma.walletTransaction.findMany({
-      where: { tenantId: tenant.id },
+      where: { tenantId },
     })
 
     const totalBalance = wallets.reduce((acc, curr) => acc + Number(curr.balance), 0)
@@ -36,7 +36,7 @@ export async function GET() {
       customers,
     })
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    const status = error?.status || 500
+    return NextResponse.json({ error: error.message }, { status })
   }
 }
-

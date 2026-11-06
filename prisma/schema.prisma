@@ -66,6 +66,17 @@ model Tenant {
   googleReviewUrl         String?        @db.VarChar(500)
   inactivityThresholdDays Int            @default(14)
   isActive                Boolean        @default(true)
+  logoUrl                 String?        @db.VarChar(500)
+  primaryColor            String?        @db.VarChar(7)
+  secondaryColor          String?        @db.VarChar(7)
+  moduleFidelizacion      Boolean        @default(true)
+  moduleMensajeria        Boolean        @default(true)
+  evolutionInstanceName   String?        @db.VarChar(100)
+  evolutionApiUrl         String?        @db.VarChar(255)
+  evolutionApiKey         String?        @db.VarChar(255)
+  plan                    String         @default("FREE")
+  ownerEmail              String?        @unique
+  ownerPasswordHash       String?
   createdAt               DateTime       @default(now())
   updatedAt               DateTime       @updatedAt
 
@@ -77,6 +88,14 @@ model Tenant {
   qrTokens                QrToken[]
   membershipPlans         MembershipPlan[]
   walletTransactions      WalletTransaction[]
+}
+
+model SuperAdmin {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
 model Staff {

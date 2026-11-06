@@ -1,16 +1,25 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
   reactCompiler: true,
-  async redirects() {
-    return [
+  turbopack: {
+    root: __dirname,
+  },
+  images: {
+    remotePatterns: [
       {
-        source: "/",
-        destination: "/club/dashboard",
-        permanent: false,
+        // BunnyCDN Pull Zone for tenant logos
+        protocol: "https",
+        hostname: "mvps.b-cdn.net",
+        pathname: "/**",
       },
-    ];
+      {
+        // BunnyCDN Storage direct (fallback)
+        protocol: "https",
+        hostname: "storage.bunnycdn.com",
+        pathname: "/**",
+      },
+    ],
   },
 };
 

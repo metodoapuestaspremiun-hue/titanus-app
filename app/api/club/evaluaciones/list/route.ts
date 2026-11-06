@@ -1,18 +1,17 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { getTenantFromRequest } from '@/lib/getTenant'
 
 // GET /api/club/evaluaciones/list: Retorna las evaluaciones con detalle de opiniones y estrellas
 export async function GET(req: Request) {
   try {
+    const { tenantId } = await getTenantFromRequest(req)
     const { searchParams } = new URL(req.url)
     const coachFilter = searchParams.get('coachId')
     const starsFilter = searchParams.get('stars')
 
-    const tenant = await prisma.tenant.findUnique({ where: { slug: 'titanus-gym' } })
-    if (!tenant) return NextResponse.json({ evaluations: [], coaches: [] })
-
-    // Filtros dinámicos
-    const whereClause: any = { tenantId: tenant.id }
+    // Filtros dinámicos respetando tenantId
+    const whereClause: any = { tenantId }
     if (coachFilter && coachFilter !== 'ALL') {
       whereClause.staffId = coachFilter
     }
@@ -30,7 +29,7 @@ export async function GET(req: Request) {
         orderBy: { createdAt: 'desc' },
       }),
       prisma.staff.findMany({
-        where: { tenantId: tenant.id, isActive: true },
+        where: { tenantId, isActive: true },
         include: { evaluations: true },
       }),
     ])
@@ -47,6 +46,7 @@ export async function GET(req: Request) {
         id: coach.id,
         name: coach.name,
         role: coach.role,
+        avatarUrl: coach.avatarUrl || null,
         stars: Number(avgStars.toFixed(2)),
         totalReviews,
       }
@@ -60,13 +60,14 @@ export async function GET(req: Request) {
         stars: e.stars,
         comment: e.comment,
         createdAt: e.createdAt,
+        coachId: e.staffId,
         customerName: e.customer?.name || 'Socio Anónimo',
         customerPhone: e.customer?.phone || '',
         coachName: e.staff?.name || 'Entrenador',
       })),
     })
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    const status = error?.status || 500
+    return NextResponse.json({ error: error.message }, { status })
   }
 }
-
