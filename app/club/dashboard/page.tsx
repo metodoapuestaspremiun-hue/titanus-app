@@ -38,11 +38,12 @@ export default function ReceptionDashboard() {
   const [searchResults, setSearchResults] = useState<any[]>([])
   const [searching, setSearching] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
-  const [qrModal, setQrModal] = useState<{ open: boolean; type: string; title: string; token: string }>({
+  const [qrModal, setQrModal] = useState<{ open: boolean; type: string; title: string; token: string; waUrl?: string }>({
     open: false,
     type: '',
     title: '',
     token: '',
+    waUrl: '',
   })
 
   // Modal de aprobación de Retail con detalle de producto
@@ -83,9 +84,10 @@ export default function ReceptionDashboard() {
     }
   }
 
-  // Cargar estadísticas globales del gimnasio
+  // Cargar estadísticas globales y configuración del gimnasio
   useEffect(() => {
     fetchGlobalStats()
+    fetchTenantConfig()
   }, [])
 
   // Buscar socios dinámicamente con el input de búsqueda
@@ -235,11 +237,15 @@ export default function ReceptionDashboard() {
       setGeneratingQr(true)
       const res = await axios.post('/api/club/qr/generate', { type })
       if (res.data.success) {
+        if (res.data.whatsappPhone && tenantConfig) {
+          setTenantConfig({ ...tenantConfig, whatsappPhone: res.data.whatsappPhone })
+        }
         setQrModal({
           open: true,
           type,
           title,
           token: res.data.token,
+          waUrl: res.data.waUrl,
         })
       }
     } catch (e: any) {
@@ -250,9 +256,12 @@ export default function ReceptionDashboard() {
   }
 
   // Enlace directo de WhatsApp con el comando prefijado
-  const whatsappTargetPhone = tenantConfig?.whatsappPhone || '593987654321'
   const getWhatsAppLink = (token: string) => {
-    return `https://wa.me/${whatsappTargetPhone}?text=${encodeURIComponent(`Hola, mi código es ${token}`)}`
+    if (qrModal.waUrl && qrModal.token === token) {
+      return qrModal.waUrl
+    }
+    const phone = tenantConfig?.whatsappPhone || '593986962872'
+    return `https://wa.me/${phone}?text=${encodeURIComponent(`Hola, mi código es ${token}`)}`
   }
 
   const tenantName = tenantConfig?.name || theme?.tenantName || 'ALL-CRM'

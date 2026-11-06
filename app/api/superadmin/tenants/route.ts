@@ -183,6 +183,29 @@ export async function POST(req: Request) {
 
         if (evoRes.ok) {
           evolutionCreated = true
+
+          // Configurar automáticamente el webhook de Evolution para la nueva instancia
+          try {
+            const webhookAppUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://titanus-app.vercel.app'
+            await fetch(`${evoUrl}/webhook/set/${cleanedInstance}`, {
+              method: 'POST',
+              headers: {
+                apikey: evoKey,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                webhook: {
+                  url: `${webhookAppUrl}/api/club/webhook/whatsapp`,
+                  enabled: true,
+                  events: ['MESSAGES_UPSERT'],
+                  webhookByEvents: false,
+                  webhookBase64: true,
+                },
+              }),
+            })
+          } catch (whErr) {
+            console.error('Error al configurar webhook de la nueva instancia:', whErr)
+          }
         }
       } catch (evoErr) {
         console.error('Error al autoprovisionar instancia Evolution:', evoErr)
