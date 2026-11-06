@@ -38,13 +38,28 @@ function extractCookie(req: Request, name: string): string | null {
  */
 export async function getTenantFromRequest(
   req: Request
-): Promise<TenantJWTPayload> {
+): Promise<TenantJWTPayload & { tenant?: any }> {
   // 1. Check gym_session cookie
   const gymSessionToken = extractCookie(req, TENANT_COOKIE_NAME)
   if (gymSessionToken) {
     try {
       const payload = await verifyTenantToken(gymSessionToken)
-      return payload
+      const tenant = await prisma.tenant.findUnique({
+        where: { id: payload.tenantId },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          evolutionInstanceName: true,
+          evolutionApiUrl: true,
+          evolutionApiKey: true,
+          whatsappPhone: true,
+        },
+      })
+      return {
+        ...payload,
+        tenant: tenant || undefined,
+      }
     } catch {
       // Failed token verification, try fallback below
     }
@@ -56,7 +71,22 @@ export async function getTenantFromRequest(
     const bearerToken = authHeader.substring(7).trim()
     try {
       const payload = await verifyTenantToken(bearerToken)
-      return payload
+      const tenant = await prisma.tenant.findUnique({
+        where: { id: payload.tenantId },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          evolutionInstanceName: true,
+          evolutionApiUrl: true,
+          evolutionApiKey: true,
+          whatsappPhone: true,
+        },
+      })
+      return {
+        ...payload,
+        tenant: tenant || undefined,
+      }
     } catch {
       // Failed token verification, continue
     }
@@ -73,13 +103,22 @@ export async function getTenantFromRequest(
       if (user === 'Titanus Gym' && secret === serverSecret) {
         const titanus = await prisma.tenant.findUnique({
           where: { slug: 'titanus-gym' },
-          select: { id: true, slug: true },
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            evolutionInstanceName: true,
+            evolutionApiUrl: true,
+            evolutionApiKey: true,
+            whatsappPhone: true,
+          },
         })
         if (titanus) {
           return {
             tenantId: titanus.id,
             tenantSlug: titanus.slug,
             role: 'OWNER',
+            tenant: titanus,
           }
         }
       }

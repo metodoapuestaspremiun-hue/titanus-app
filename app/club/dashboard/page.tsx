@@ -20,8 +20,10 @@ import {
 import axios from 'axios'
 import { QRCodeSVG } from 'qrcode.react'
 import { action_membership_jpg, action_bar_jpg, action_coach_jpg } from '@/lib/brandingImages'
+import { useTheme } from '@/components/ThemeProvider'
 
 export default function ReceptionDashboard() {
+  const theme = useTheme()
   const [searchQuery, setSearchQuery] = useState('')
   const [payments, setPayments] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
@@ -253,7 +255,7 @@ export default function ReceptionDashboard() {
     return `https://wa.me/${whatsappTargetPhone}?text=${encodeURIComponent(`Hola, mi código es ${token}`)}`
   }
 
-  const tenantName = tenantConfig?.name || 'TITANUS GYM'
+  const tenantName = tenantConfig?.name || theme?.tenantName || 'ALL-CRM'
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-8 relative">
@@ -479,7 +481,7 @@ export default function ReceptionDashboard() {
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <h3 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-                      {tenantConfig?.name || 'TITANUS GYM'}
+                      {tenantConfig?.name || theme?.tenantName || 'ALL-CRM'}
                     </h3>
                     <span className="text-xs text-zinc-400 font-mono">
                       (Monedero & Cashback Global)

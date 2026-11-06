@@ -1,33 +1,41 @@
 import { NextResponse } from 'next/server';
+import { getTenantFromRequest } from '@/lib/getTenant';
 
-export async function POST() {
+export async function POST(req: Request) {
     try {
-        const EVOLUTION_API_URL = process.env.EVOLUTION_API_URL || 'http://129.153.116.213:8080';
-        const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY;
-        const EVOLUTION_INSTANCE_NAME = process.env.EVOLUTION_INSTANCE_NAME || 'gym_bot';
+        let apiUrl = process.env.EVOLUTION_API_URL || 'http://178.238.238.158:8080';
+        let apiKey = process.env.EVOLUTION_API_KEY || '42a447c1-3d74-4b52-9571-042c174f7621';
+        let instanceName = process.env.EVOLUTION_INSTANCE_NAME || 'gym_bot';
 
-        console.log(`Attempting to logout instance: ${EVOLUTION_INSTANCE_NAME}`);
+        try {
+            const { tenant } = await getTenantFromRequest(req);
+            if (tenant) {
+                if (tenant.evolutionInstanceName) {
+                    instanceName = tenant.evolutionInstanceName;
+                }
+                if (tenant.evolutionApiUrl) {
+                    apiUrl = tenant.evolutionApiUrl;
+                }
+                if (tenant.evolutionApiKey) {
+                    apiKey = tenant.evolutionApiKey;
+                }
+            }
+        } catch {}
+
+        console.log(`Attempting to logout instance: ${instanceName}`);
 
         const response = await fetch(
-            `${EVOLUTION_API_URL}/instance/logout/${EVOLUTION_INSTANCE_NAME}`,
+            `${apiUrl}/instance/logout/${instanceName}`,
             {
                 method: 'DELETE',
                 headers: {
-                    'apikey': EVOLUTION_API_KEY || '',
+                    'apikey': apiKey,
                     'Content-Type': 'application/json'
                 }
             }
         );
 
         const data = await response.json();
-        console.log('Logout response:', data);
-
-        if (!response.ok && response.status !== 404) { // 404 might mean already logged out
-            console.error('Logout failed:', data);
-            // Verify if it's actually disconnected despite the error (sometimes APIs are quirky)
-            // But for now, throw error
-            throw new Error(data.message || 'Failed to logout instance');
-        }
 
         return NextResponse.json({
             success: true,

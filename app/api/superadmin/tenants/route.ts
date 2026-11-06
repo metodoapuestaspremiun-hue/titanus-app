@@ -129,7 +129,8 @@ export async function POST(req: Request) {
         .digest('hex')
     }
 
-    const cleanedInstance = evolutionInstanceName?.trim() || null
+    // Instancia de Evolution API: si no se especifica nombre, se autogenera con el slug del gimnasio
+    const cleanedInstance = evolutionInstanceName?.trim() || `gym_${finalSlug.replace(/[^a-zA-Z0-9_]/g, '_')}`
 
     // Crear Tenant en base de datos
     const createdTenant = await prisma.tenant.create({

@@ -3,10 +3,10 @@
 import React, { useState } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import { Lock, Mail, AlertCircle, ArrowRight } from 'lucide-react'
+import { Lock, User, AlertCircle, ArrowRight } from 'lucide-react'
 
 export default function SuperAdminLoginPage() {
-  const [email, setEmail] = useState('')
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -21,7 +21,7 @@ export default function SuperAdminLoginPage() {
       const res = await fetch('/api/superadmin/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ username, password }),
       })
 
       const data = await res.json()
@@ -74,17 +74,17 @@ export default function SuperAdminLoginPage() {
 
             <div className="space-y-1.5">
               <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block">
-                Correo SuperAdmin
+                Usuario SuperAdmin
               </label>
               <div className="relative">
-                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 h-4 w-4" />
+                <User className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 h-4 w-4" />
                 <input
-                  type="email"
+                  type="text"
                   required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="superadmin@saas.com"
-                  autoComplete="email"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="All"
+                  autoComplete="username"
                   className="w-full bg-zinc-900/90 border border-zinc-800 rounded-xl py-3 pl-10 pr-4 text-white text-sm placeholder:text-zinc-600 focus:outline-none focus:border-[#00F5D4] focus:ring-1 focus:ring-[#00F5D4] transition-all"
                 />
               </div>
@@ -116,12 +116,6 @@ export default function SuperAdminLoginPage() {
               <span>{loading ? 'Accediendo...' : 'Iniciar Sesión'}</span>
               {!loading && <ArrowRight className="w-4 h-4" />}
             </button>
-
-            <div className="pt-2 text-center">
-              <span className="text-[11px] text-zinc-500 font-mono">
-                Credencial por defecto: superadmin@saas.com
-              </span>
-            </div>
           </form>
         </div>
       </div>
