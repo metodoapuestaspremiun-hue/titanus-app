@@ -45,6 +45,7 @@ export async function GET(
 
     const { searchParams } = new URL(req.url)
     const slugQuery = searchParams.get('slug')?.toLowerCase() || targetSlug
+    const existingToken = searchParams.get('token')
 
     let tenant = null
     if (slugQuery) {
@@ -78,21 +79,24 @@ export async function GET(
       return new Response('Gimnasio no configurado', { status: 404 })
     }
 
-    // 1. Generar token único criptográfico efímero
-    const randomSuffix = crypto.randomBytes(3).toString('hex').toUpperCase()
-    const token = `${prefix}-${randomSuffix}`
+    let token = existingToken
+    if (!token) {
+      // 1. Generar token único criptográfico efímero
+      const randomSuffix = crypto.randomBytes(3).toString('hex').toUpperCase()
+      token = `${prefix}-${randomSuffix}`
 
-    // 2. Guardar en la tabla QrToken con TTL de 2 minutos
-    const expiresAt = new Date(Date.now() + 120 * 1000)
+      // 2. Guardar en la tabla QrToken con TTL de 2 minutos
+      const expiresAt = new Date(Date.now() + 120 * 1000)
 
-    await prisma.qrToken.create({
-      data: {
-        tenantId: tenant.id,
-        type: qrType,
-        token: token,
-        expiresAt: expiresAt,
-      },
-    })
+      await prisma.qrToken.create({
+        data: {
+          tenantId: tenant.id,
+          type: qrType,
+          token: token,
+          expiresAt: expiresAt,
+        },
+      })
+    }
 
     // 3. Obtener dinámicamente el número REAL conectado a la instancia en Evolution API
     let whatsappPhone: string | null = null

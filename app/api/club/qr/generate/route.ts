@@ -75,9 +75,13 @@ export async function POST(req: Request) {
 
     const waUrl = `https://wa.me/${effectivePhone}?text=${encodeURIComponent(`Hola, mi código es ${tokenString}`)}`
 
+    // Resolver el slug del tenant para armar la URL universal dinámica
+    const tenantSlug = tenant?.slug || fullTenant?.evolutionInstanceName?.replace('gym_', '') || 'club'
+
     return NextResponse.json({
       success: true,
       token: qrToken.token,
+      slug: tenantSlug,
       whatsappPhone: effectivePhone,
       waUrl: waUrl,
       expiresAt: qrToken.expiresAt,

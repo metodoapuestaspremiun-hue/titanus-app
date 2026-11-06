@@ -38,11 +38,19 @@ export default function ReceptionDashboard() {
   const [searchResults, setSearchResults] = useState<any[]>([])
   const [searching, setSearching] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
-  const [qrModal, setQrModal] = useState<{ open: boolean; type: string; title: string; token: string; waUrl?: string }>({
+  const [qrModal, setQrModal] = useState<{
+    open: boolean
+    type: string
+    title: string
+    token: string
+    qrUrl: string
+    waUrl: string
+  }>({
     open: false,
     type: '',
     title: '',
     token: '',
+    qrUrl: '',
     waUrl: '',
   })
 
@@ -50,6 +58,25 @@ export default function ReceptionDashboard() {
   const [retailModal, setRetailModal] = useState<{ open: boolean; paymentId: string; customerName: string } | null>(null)
   const [retailAmount, setRetailAmount] = useState('')
   const [retailProduct, setRetailProduct] = useState('')
+
+  // Sondeo automático del estado del QR proyectado (cambia automáticamente cuando el socio lo consume)
+  useEffect(() => {
+    if (!qrModal.open || !qrModal.token) return
+
+    const checkTokenUsage = async () => {
+      try {
+        const res = await axios.get(`/api/club/qr/check?token=${qrModal.token}`)
+        // Si el token ya fue consumido por WhatsApp, regenerar inmediatamente el siguiente código
+        if (res.data?.consumed) {
+          openDynamicQr(qrModal.type as any, qrModal.title)
+          fetchPendingPayments()
+        }
+      } catch {}
+    }
+
+    const interval = setInterval(checkTokenUsage, 3000)
+    return () => clearInterval(interval)
+  }, [qrModal.open, qrModal.token, qrModal.type, qrModal.title])
 
   const fetchTenantConfig = async () => {
     try {
@@ -235,21 +262,26 @@ export default function ReceptionDashboard() {
   const openDynamicQr = async (type: 'MEMBERSHIP' | 'RETAIL' | 'EVALUATION', title: string) => {
     try {
       setGeneratingQr(true)
-      const res = await axios.post('/api/club/qr/generate', { type })
-      if (res.data.success) {
-        if (res.data.whatsappPhone && tenantConfig) {
-          setTenantConfig({ ...tenantConfig, whatsappPhone: res.data.whatsappPhone })
-        }
-        setQrModal({
-          open: true,
-          type,
-          title,
-          token: res.data.token,
-          waUrl: res.data.waUrl,
-        })
-      }
+      
+      // Mapear el tipo a la ruta corta del servidor
+      const typeSegment = type === 'MEMBERSHIP' ? 'm' : type === 'RETAIL' ? 't' : 'c'
+      const tenantSlug = tenantConfig?.slug || 'club'
+      
+      // URL FÍSICA FIJA E IMPRIMIBLE:
+      // El QR impreso NUNCA cambia su diseño. Siempre apunta a esta URL fija.
+      // Cuando el socio lo escanea, el servidor genera el token al vuelo y lo manda al WhatsApp de su instancia.
+      const printableFixedUrl = `${window.location.origin}/qr/${tenantSlug}/${typeSegment}`
+
+      setQrModal({
+        open: true,
+        type,
+        title,
+        token: `${typeSegment.toUpperCase()}-AUTO`,
+        qrUrl: printableFixedUrl,
+        waUrl: printableFixedUrl,
+      })
     } catch (e: any) {
-      alert('Error generando código QR dinámico: ' + (e.response?.data?.error || e.message))
+      alert('Error mostrando código QR: ' + (e.response?.data?.error || e.message))
     } finally {
       setGeneratingQr(false)
     }
@@ -827,7 +859,7 @@ export default function ReceptionDashboard() {
             >
               <QRCodeSVG
                 id="qr-code-svg"
-                value={getWhatsAppLink(qrModal.token)}
+                value={qrModal.qrUrl || qrModal.waUrl || `${window.location.origin}/qr/${tenantConfig?.slug || 'club'}/m?token=${qrModal.token}`}
                 size={210}
                 level="M"
                 includeMargin={true}
@@ -843,24 +875,24 @@ export default function ReceptionDashboard() {
                   color: 'var(--color-primary, #00F5D4)'
                 }}
               >
-                Código Dinámico: {qrModal.token}
+                QR Imprimible Oficial: /{tenantConfig?.slug || 'club'}/{qrModal.type === 'MEMBERSHIP' ? 'm' : qrModal.type === 'RETAIL' ? 't' : 'c'}
               </span>
               <button
                 onClick={downloadQrCode}
                 className="p-1 rounded-lg bg-zinc-900 border border-white/10 text-zinc-300 hover:text-white transition-all text-xs flex items-center gap-1 px-2"
-                title="Descargar imagen PNG del QR"
+                title="Descargar imagen PNG del QR para imprimir en acrílico o mostrador"
               >
                 <Download className="w-3.5 h-3.5" style={{ color: 'var(--color-primary, #00F5D4)' }} />
-                Descargar PNG
+                Descargar PNG para Imprimir
               </button>
             </div>
 
             <p className="text-xs text-zinc-400 mb-3">
-              Este código es de un solo uso y expira en 15 minutos para evitar capturas o repeticiones fraudulentas.
+              Puedes imprimir este código en tu mostrador o acrílico. Cada vez que un socio lo escanea con su cámara, el sistema le genera su código único al vuelo y lo conecta al WhatsApp de este gimnasio.
             </p>
 
             <a
-              href={getWhatsAppLink(qrModal.token)}
+              href={qrModal.waUrl || qrModal.qrUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 text-xs hover:underline font-bold"

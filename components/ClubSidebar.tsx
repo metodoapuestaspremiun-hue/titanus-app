@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -26,6 +27,26 @@ interface ClubSidebarProps {
 export default function ClubSidebar({ onCloseMobile, isMobileDrawer = false }: ClubSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const [waConnected, setWaConnected] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    async function checkWaStatus() {
+      try {
+        const res = await fetch("/api/whatsapp/status");
+        if (res.ok) {
+          const data = await res.json();
+          setWaConnected(data.state === "open");
+        } else {
+          setWaConnected(false);
+        }
+      } catch {
+        setWaConnected(false);
+      }
+    }
+    checkWaStatus();
+    const interval = setInterval(checkWaStatus, 15000);
+    return () => clearInterval(interval);
+  }, []);
 
   const handleLogout = async () => {
     try {
@@ -93,22 +114,33 @@ export default function ClubSidebar({ onCloseMobile, isMobileDrawer = false }: C
       </div>
 
       <div className="space-y-3">
-        {/* Status WhatsApp */}
+        {/* Status WhatsApp Dinámico */}
         <div className="p-3 rounded-xl bg-[var(--bg-card,#05101C)] border border-[var(--border-card,rgba(0,245,212,0.15))] text-xs">
           <div className="flex items-center justify-between mb-1">
             <span className="text-zinc-400">Canal WhatsApp</span>
-            <span
-              className="inline-flex items-center gap-1.5 font-bold"
-              style={{ color: "var(--color-primary, #00F5D4)" }}
-            >
+            {waConnected === true ? (
               <span
-                className="w-2 h-2 rounded-full animate-pulse"
-                style={{ backgroundColor: "var(--color-primary, #00F5D4)" }}
-              ></span>
-              En Línea
-            </span>
+                className="inline-flex items-center gap-1.5 font-bold"
+                style={{ color: "var(--color-primary, #00F5D4)" }}
+              >
+                <span
+                  className="w-2 h-2 rounded-full animate-pulse"
+                  style={{ backgroundColor: "var(--color-primary, #00F5D4)" }}
+                ></span>
+                En Línea
+              </span>
+            ) : waConnected === false ? (
+              <span className="inline-flex items-center gap-1.5 font-bold text-amber-500">
+                <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                Desconectado
+              </span>
+            ) : (
+              <span className="text-zinc-500 text-[11px]">Verificando...</span>
+            )}
           </div>
-          <span className="text-zinc-500 text-[11px] block">Servicio Activo</span>
+          <span className="text-zinc-500 text-[11px] block">
+            {waConnected ? "Servicio Activo" : "Requiere vinculación QR"}
+          </span>
         </div>
 
         {/* Cerrar Sesión */}
