@@ -111,10 +111,19 @@ export default function ReceptionDashboard() {
     }
   }
 
-  // Cargar estadísticas globales y configuración del gimnasio
+  // Cargar estadísticas globales, configuración del gimnasio y pagos pendientes al montar y en intervalo
   useEffect(() => {
     fetchGlobalStats()
     fetchTenantConfig()
+    fetchPendingPayments()
+
+    // Polling continuo cada 3 segundos para detectar en tiempo real cuando llega una compra de WhatsApp
+    const pollInterval = setInterval(() => {
+      fetchPendingPayments()
+      fetchGlobalStats()
+    }, 3000)
+
+    return () => clearInterval(pollInterval)
   }, [])
 
   // Buscar socios dinámicamente con el input de búsqueda
@@ -251,7 +260,7 @@ export default function ReceptionDashboard() {
         ctx.drawImage(img, 50, 50, 500, 500)
         const pngFile = canvas.toDataURL('image/png')
         const downloadLink = document.createElement('a')
-        downloadLink.download = `QR_${qrModal.type}_${qrModal.token}.png`
+        downloadLink.download = `QR_${tenantConfig?.slug || 'club'}_${qrModal.type}.png`
         downloadLink.href = pngFile
         downloadLink.click()
       }
@@ -262,27 +271,36 @@ export default function ReceptionDashboard() {
   const openDynamicQr = async (type: 'MEMBERSHIP' | 'RETAIL' | 'EVALUATION', title: string) => {
     try {
       setGeneratingQr(true)
-      const res = await axios.post('/api/club/qr/generate', { type })
-      if (res.data.success) {
-        if (res.data.whatsappPhone && tenantConfig) {
-          setTenantConfig({ ...tenantConfig, whatsappPhone: res.data.whatsappPhone })
-        }
-
-        // Enlace NATIVO DIRECTO de WhatsApp:
-        // https://wa.me/593967491847?text=Hola,%20mi%20código%20es%20MEM-XXXXXX
-        const directWhatsAppUrl = res.data.waUrl
-
-        setQrModal({
-          open: true,
-          type,
-          title,
-          token: res.data.token,
-          qrUrl: directWhatsAppUrl,
-          waUrl: directWhatsAppUrl,
-        })
+      
+      // Obtener la configuración fresca del tenant
+      let phone = tenantConfig?.whatsappPhone
+      if (!phone) {
+        try {
+          const cfgRes = await axios.get('/api/club/config')
+          if (cfgRes.data) {
+            phone = cfgRes.data.whatsappPhone
+            setTenantConfig(cfgRes.data)
+          }
+        } catch {}
       }
+      
+      const targetPhone = phone || '593967491847'
+      const prefix = type === 'MEMBERSHIP' ? 'MEM' : type === 'RETAIL' ? 'RET' : 'EVAL'
+      
+      // ENLACE 100% DIRECTO A WHATSAPP:
+      // Sin intermediarios, sin pasar por /qr/..., directo a wa.me del WhatsApp conectado
+      const directWhatsAppUrl = `https://wa.me/${targetPhone}?text=${encodeURIComponent(`Hola, mi código es ${prefix}`)}`
+
+      setQrModal({
+        open: true,
+        type,
+        title,
+        token: prefix,
+        qrUrl: directWhatsAppUrl,
+        waUrl: directWhatsAppUrl,
+      })
     } catch (e: any) {
-      alert('Error generando código QR dinámico: ' + (e.response?.data?.error || e.message))
+      alert('Error mostrando código QR: ' + (e.response?.data?.error || e.message))
     } finally {
       setGeneratingQr(false)
     }
@@ -860,7 +878,7 @@ export default function ReceptionDashboard() {
             >
               <QRCodeSVG
                 id="qr-code-svg"
-                value={qrModal.waUrl || qrModal.qrUrl}
+                value={qrModal.qrUrl}
                 size={210}
                 level="M"
                 includeMargin={true}
@@ -876,20 +894,20 @@ export default function ReceptionDashboard() {
                   color: 'var(--color-primary, #00F5D4)'
                 }}
               >
-                Código Dinámico: {qrModal.token}
+                Cartel Permanente /{tenantConfig?.slug || 'club'}/{qrModal.type === 'MEMBERSHIP' ? 'm' : qrModal.type === 'RETAIL' ? 't' : 'c'}
               </span>
               <button
                 onClick={downloadQrCode}
                 className="p-1 rounded-lg bg-zinc-900 border border-white/10 text-zinc-300 hover:text-white transition-all text-xs flex items-center gap-1 px-2"
-                title="Descargar imagen PNG del QR"
+                title="Descargar este QR para imprimirlo en tu cartel o acrílico"
               >
                 <Download className="w-3.5 h-3.5" style={{ color: 'var(--color-primary, #00F5D4)' }} />
-                Descargar PNG
+                Descargar para Imprimir
               </button>
             </div>
 
             <p className="text-xs text-zinc-400 mb-3">
-              Al escanear con la cámara del celular se abre WhatsApp directamente en la instancia de este gimnasio. Código válido por 15 minutos.
+              Este es el código QR físico permanente. Imprímelo una sola vez. Cada cliente que lo escanee recibirá automáticamente su código seguro generado por el servidor y será dirigido al WhatsApp activo.
             </p>
 
             <a

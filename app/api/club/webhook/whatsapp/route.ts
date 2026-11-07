@@ -181,8 +181,9 @@ export async function POST(req: Request) {
       const stars = parseInt(rawText)
       const coachId = pendingStars.token.split('|COACH:')[1] || ''
 
+      let createdEvalId: string | null = null
       if (coachId) {
-        await prisma.evaluation.create({
+        const createdEval = await prisma.evaluation.create({
           data: {
             tenantId: tenant.id,
             customerId: customer.id,
@@ -190,6 +191,7 @@ export async function POST(req: Request) {
             stars,
           },
         })
+        createdEvalId = createdEval.id
       }
 
       await prisma.qrToken.deleteMany({
@@ -204,6 +206,18 @@ export async function POST(req: Request) {
           evoInstance
         )
       } else {
+        // Para 1 a 4 estrellas: Guardar token esperando el comentario de auditoría
+        if (createdEvalId) {
+          await prisma.qrToken.create({
+            data: {
+              tenantId: tenant.id,
+              type: 'EVAL_WAITING_COMMENT',
+              token: `EVAL_COMMENT_${phone}|EVAL:${createdEvalId}`,
+              expiresAt: new Date(Date.now() + 15 * 60 * 1000), // 15 min para responder
+            },
+          })
+        }
+
         await sendWhatsAppMessage(
           phone,
           `🙏 *Gracias por tu feedback sincero, ${customer.name}.*\n\nEn ${tenant.name} queremos mejorar siempre. ¿Tienes alguna sugerencia o comentario sobre tu entrenamiento? Responde a este mensaje y la administración lo revisará.`,
@@ -211,6 +225,38 @@ export async function POST(req: Request) {
         )
       }
       return NextResponse.json({ status: 'evaluation_recorded', stars })
+    }
+
+    // B.2) Flujo 1: Calificación de Coaches - Recepción del comentario/sugerencia (1 a 4 estrellas)
+    const pendingComment = await prisma.qrToken.findFirst({
+      where: {
+        tenantId: tenant.id,
+        type: 'EVAL_WAITING_COMMENT',
+        token: { startsWith: `EVAL_COMMENT_${phone}` },
+        expiresAt: { gt: new Date() },
+      },
+    })
+
+    if (pendingComment && rawText.trim().length > 0) {
+      const evalId = pendingComment.token.split('|EVAL:')[1] || ''
+
+      if (evalId) {
+        await prisma.evaluation.update({
+          where: { id: evalId },
+          data: { comment: rawText.trim() },
+        })
+      }
+
+      await prisma.qrToken.deleteMany({
+        where: { tenantId: tenant.id, token: { startsWith: `EVAL_COMMENT_${phone}` } },
+      })
+
+      await sendWhatsAppMessage(
+        phone,
+        `✅ *Comentario recibido.*\n\nMuchas gracias, ${customer.name}. Tu mensaje ha sido registrado internamente para la gerencia de *${tenant.name}*. Nos ayuda a mejorar el servicio día a día. 💪`,
+        evoInstance
+      )
+      return NextResponse.json({ status: 'comment_recorded', evalId })
     }
 
     // C) Flujo 2: Selección de Plan de Mensualidad -> Envía a Cola de Recepción (REQUIERE APROBACIÓN)
@@ -263,43 +309,48 @@ export async function POST(req: Request) {
       }
     }
 
-    // Extraer token si viene en formato "Hola, mi código es MEM-XXXX" o directamente "MEM-XXXX"
-    const match = rawText.match(/(MEM-[A-Z0-9]+|RET-[A-Z0-9]+|EVAL-[A-Z0-9]+)/i)
-    const tokenExtracted = match ? match[1].toUpperCase() : rawText
+    // Extraer token si viene en formato "Hola, mi código es MEM-XXXX" o directamente "MEM-XXXX" o simplemente "MEM", "RET", "EVAL"
+    const match = rawText.match(/(MEM-[A-Z0-9]+|RET-[A-Z0-9]+|EVAL-[A-Z0-9]+|\bMEM\b|\bRET\b|\bEVAL\b)/i)
+    const tokenExtracted = match ? match[1].toUpperCase() : rawText.trim().toUpperCase()
 
     // Si no es un comando de código QR, ignorar
-    const isQrCommand = tokenExtracted.startsWith('EVAL-') || tokenExtracted.startsWith('MEM-') || tokenExtracted.startsWith('RET-')
+    const isQrCommand = tokenExtracted.startsWith('EVAL') || tokenExtracted.startsWith('MEM') || tokenExtracted.startsWith('RET')
     if (!isQrCommand) {
       return NextResponse.json({ status: 'not_club_command' })
     }
 
-    // -------------------------------------------------------------
-    // CONSUMO ATÓMICO DEL TOKEN QR (SEGURIDAD ANTIFRAUDE)
-    // -------------------------------------------------------------
-    const validQr = await prisma.qrToken.findFirst({
-      where: {
-        tenantId: tenant.id,
-        token: tokenExtracted,
-        expiresAt: { gt: new Date() },
-      },
-    })
+    // Si es un comando directo permanente (MEM, RET, EVAL), NO requiere token efímero
+    const isPermanentCommand = tokenExtracted === 'MEM' || tokenExtracted === 'RET' || tokenExtracted === 'EVAL'
 
-    if (!validQr) {
-      await sendWhatsAppMessage(
-        phone,
-        `⚠️ *Código QR no válido o ya utilizado*\n\nEste código ya fue consumido o su tiempo de escaneo expiró. Por favor vuelve a escanear el cartel oficial en el gimnasio.`,
-        evoInstance
-      )
-      return NextResponse.json({ status: 'qr_expired_or_invalid' })
+    if (!isPermanentCommand) {
+      // -------------------------------------------------------------
+      // CONSUMO ATÓMICO DEL TOKEN QR (SEGURIDAD ANTIFRAUDE PARA EFÍMEROS)
+      // -------------------------------------------------------------
+      const validQr = await prisma.qrToken.findFirst({
+        where: {
+          tenantId: tenant.id,
+          token: tokenExtracted,
+          expiresAt: { gt: new Date() },
+        },
+      })
+
+      if (!validQr) {
+        await sendWhatsAppMessage(
+          phone,
+          `⚠️ *Código QR no válido o ya utilizado*\n\nEste código ya fue consumido o su tiempo de escaneo expiró. Por favor vuelve a escanear el cartel oficial en el gimnasio.`,
+          evoInstance
+        )
+        return NextResponse.json({ status: 'qr_expired_or_invalid' })
+      }
+
+      // Quemar el token inmediatamente de la base de datos (Un solo uso)
+      await prisma.qrToken.delete({ where: { id: validQr.id } })
     }
 
-    // Quemar el token inmediatamente de la base de datos (Un solo uso)
-    await prisma.qrToken.delete({ where: { id: validQr.id } })
-
     // -------------------------------------------------------------
-    // FLUJO 1: CALIFICAR COACH (QR: EVAL-*) -> 100% AUTÓNOMO (NO REQUIERE APROBACIÓN)
+    // FLUJO 1: CALIFICAR COACH (QR: EVAL) -> 100% AUTÓNOMO (NO REQUIERE APROBACIÓN)
     // -------------------------------------------------------------
-    if (tokenExtracted.startsWith('EVAL-')) {
+    if (tokenExtracted.startsWith('EVAL')) {
       const coaches = await prisma.staff.findMany({
         where: { tenantId: tenant.id, isActive: true },
         orderBy: { name: 'asc' },
@@ -339,9 +390,9 @@ export async function POST(req: Request) {
     }
 
     // -------------------------------------------------------------
-    // FLUJO 2: PAGO DE MENSUALIDAD (QR: MEM-*) -> REQUIERE APROBACIÓN EN CAJA
+    // FLUJO 2: PAGO DE MENSUALIDAD (QR: MEM) -> REQUIERE APROBACIÓN EN CAJA
     // -------------------------------------------------------------
-    if (tokenExtracted.startsWith('MEM-')) {
+    if (tokenExtracted.startsWith('MEM')) {
       const plans = await prisma.membershipPlan.findMany({
         where: { tenantId: tenant.id, isActive: true },
         orderBy: { price: 'asc' },
@@ -374,9 +425,9 @@ export async function POST(req: Request) {
     }
 
     // -------------------------------------------------------------
-    // FLUJO 3: TIENDA RETAIL / BARRA (QR: RET-*) -> REQUIERE APROBACIÓN EN CAJA
+    // FLUJO 3: TIENDA RETAIL / BARRA (QR: RET) -> REQUIERE APROBACIÓN EN CAJA
     // -------------------------------------------------------------
-    if (tokenExtracted.startsWith('RET-')) {
+    if (tokenExtracted.startsWith('RET')) {
       const cashbackPct = Number(tenant.storeReferralCommPct)
 
       // Registra en caja con estado PENDING para que recepción ponga el monto y apruebe
