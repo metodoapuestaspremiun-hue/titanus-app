@@ -15,7 +15,10 @@ import {
   X,
   RefreshCw,
   ExternalLink,
-  Download
+  Download,
+  Ticket,
+  UserCheck,
+  AlertCircle
 } from 'lucide-react'
 import axios from 'axios'
 import { QRCodeSVG } from 'qrcode.react'
@@ -58,6 +61,17 @@ export default function ReceptionDashboard() {
   const [retailModal, setRetailModal] = useState<{ open: boolean; paymentId: string; customerName: string } | null>(null)
   const [retailAmount, setRetailAmount] = useState('')
   const [retailProduct, setRetailProduct] = useState('')
+
+  // Estado para el modal de canje de "Pase de un Amigo" en mostrador
+  const [friendPassModal, setFriendPassModal] = useState(false)
+  const [passCodeInput, setPassCodeInput] = useState('')
+  const [verifyingPass, setVerifyingPass] = useState(false)
+  const [verifiedPass, setVerifiedPass] = useState<any>(null)
+  const [passError, setPassError] = useState<string | null>(null)
+  const [friendName, setFriendName] = useState('')
+  const [friendPhone, setFriendPhone] = useState('')
+  const [redeemingPass, setRedeemingPass] = useState(false)
+  const [passSuccess, setPassSuccess] = useState<string | null>(null)
 
   // Sondeo automático del estado del QR proyectado (cambia automáticamente cuando el socio lo consume)
   useEffect(() => {
@@ -241,6 +255,65 @@ export default function ReceptionDashboard() {
 
   const [generatingQr, setGeneratingQr] = useState(false)
 
+  // Verificar código de Pase Amigo
+  const handleVerifyPass = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault()
+    if (!passCodeInput.trim()) return
+
+    try {
+      setVerifyingPass(true)
+      setPassError(null)
+      setVerifiedPass(null)
+      setPassSuccess(null)
+
+      const res = await axios.get(`/api/club/passes?code=${encodeURIComponent(passCodeInput.trim())}`)
+      if (res.data?.valid) {
+        setVerifiedPass(res.data.pass)
+      }
+    } catch (e: any) {
+      setPassError(e.response?.data?.error || 'Código no válido o inexistente')
+    } finally {
+      setVerifyingPass(false)
+    }
+  }
+
+  // Canjear y dar acceso al amigo
+  const handleRedeemPass = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!verifiedPass || !friendName.trim()) return
+
+    try {
+      setRedeemingPass(true)
+      setPassError(null)
+
+      const res = await axios.post('/api/club/passes', {
+        passId: verifiedPass.id,
+        redeemedByName: friendName.trim(),
+        redeemedByPhone: friendPhone.trim(),
+      })
+
+      setPassSuccess(res.data?.message || '¡Pase de amigo canjeado con éxito! Acceso autorizado.')
+      setVerifiedPass(null)
+      setPassCodeInput('')
+      setFriendName('')
+      setFriendPhone('')
+    } catch (e: any) {
+      setPassError(e.response?.data?.error || 'Error al canjear el pase')
+    } finally {
+      setRedeemingPass(false)
+    }
+  }
+
+  const resetPassModal = () => {
+    setFriendPassModal(false)
+    setPassCodeInput('')
+    setVerifiedPass(null)
+    setPassError(null)
+    setPassSuccess(null)
+    setFriendName('')
+    setFriendPhone('')
+  }
+
   // Descargar el código QR proyectado como imagen PNG
   const downloadQrCode = () => {
     const svg = document.getElementById('qr-code-svg')
@@ -340,6 +413,15 @@ export default function ReceptionDashboard() {
         </div>
 
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => setFriendPassModal(true)}
+            className="px-4 py-2.5 rounded-xl text-black font-black text-sm flex items-center gap-2 shadow-lg transition-all"
+            style={{ backgroundColor: 'var(--color-primary, #00F5D4)' }}
+          >
+            <Ticket className="w-4 h-4 text-black" />
+            Canjear Pase Amigo
+          </button>
+
           <button
             onClick={fetchPendingPayments}
             className="p-2.5 rounded-xl bg-[var(--bg-card,#05101C)] border border-[var(--border-card,rgba(0,245,212,0.15))] transition-all text-zinc-400 hover:text-white"
@@ -1095,6 +1177,182 @@ export default function ReceptionDashboard() {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+      {/* Modal Canjear Pase Amigo en Mostrador */}
+      {friendPassModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div
+            className="w-full max-w-lg rounded-3xl border p-8 space-y-6 relative shadow-2xl"
+            style={{
+              backgroundColor: 'var(--bg-card, #05101C)',
+              borderColor: 'var(--border-card, rgba(0,245,212,0.2))',
+            }}
+          >
+            <div className="flex items-center justify-between border-b border-white/10 pb-4">
+              <div className="flex items-center gap-3">
+                <div
+                  className="w-10 h-10 rounded-2xl flex items-center justify-center"
+                  style={{
+                    backgroundColor: 'color-mix(in srgb, var(--color-primary, #00F5D4) 15%, transparent)',
+                    color: 'var(--color-primary, #00F5D4)',
+                  }}
+                >
+                  <Ticket className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-black text-white">Canjear Pase de Amigo</h3>
+                  <p className="text-xs text-zinc-400">Acceso de 1 día de cortesía otorgado por un socio</p>
+                </div>
+              </div>
+              <button
+                onClick={resetPassModal}
+                className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-400 hover:text-white transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Mensaje de Éxito */}
+            {passSuccess && (
+              <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm space-y-2 animate-in fade-in">
+                <div className="flex items-center gap-2 font-bold">
+                  <CheckCircle2 className="w-5 h-5 shrink-0" />
+                  <span>{passSuccess}</span>
+                </div>
+                <p className="text-xs text-emerald-300/80">
+                  El amigo ya puede ingresar a las instalaciones. El código ha quedado quemado y no podrá volver a usarse.
+                </p>
+                <button
+                  onClick={() => setPassSuccess(null)}
+                  className="mt-2 text-xs font-bold underline hover:opacity-80 block"
+                >
+                  Canjear otro código
+                </button>
+              </div>
+            )}
+
+            {/* Mensaje de Error */}
+            {passError && (
+              <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm flex items-start gap-3 animate-in fade-in">
+                <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold block">No se puede canjear</span>
+                  <span className="text-xs text-red-300/80">{passError}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Paso 1: Ingreso del Código */}
+            {!verifiedPass && !passSuccess && (
+              <form onSubmit={handleVerifyPass} className="space-y-4">
+                <div>
+                  <label className="text-xs font-bold uppercase text-zinc-400 tracking-wider block mb-2">
+                    Código de Pase (Dictado por el cliente)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ej: AMIGO-9X2Y"
+                    value={passCodeInput}
+                    onChange={(e) => setPassCodeInput(e.target.value.toUpperCase())}
+                    className="w-full px-5 py-4 bg-zinc-900 border border-white/10 rounded-2xl text-white text-lg font-mono font-black tracking-widest focus:outline-none transition-colors uppercase placeholder-zinc-600"
+                    autoFocus
+                  />
+                  <span className="text-[11px] text-zinc-500 mt-1 block">
+                    Cada código es de 1 solo uso y viene incluido al pagar la mensualidad.
+                  </span>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={verifyingPass || !passCodeInput.trim()}
+                  className="w-full py-4 rounded-2xl text-black font-black text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                  style={{ backgroundColor: 'var(--color-primary, #00F5D4)' }}
+                >
+                  {verifyingPass ? (
+                    <RefreshCw className="w-4 h-4 animate-spin text-black" />
+                  ) : (
+                    <Search className="w-4 h-4 text-black" />
+                  )}
+                  {verifyingPass ? 'Verificando Código...' : 'Verificar Pase'}
+                </button>
+              </form>
+            )}
+
+            {/* Paso 2: Pase Válido encontrado -> Registrar Amigo y Conceder Acceso */}
+            {verifiedPass && !passSuccess && (
+              <form onSubmit={handleRedeemPass} className="space-y-5 animate-in fade-in">
+                <div className="p-4 rounded-2xl bg-zinc-900 border border-white/10 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-zinc-400">Pase Verificado:</span>
+                    <span className="font-mono font-black text-sm text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-lg border border-emerald-500/20">
+                      {verifiedPass.code}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-zinc-400">Invitado por el Socio:</span>
+                    <span className="font-bold text-sm text-white">
+                      {verifiedPass.sponsor?.name || 'Socio'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-zinc-400">Válido hasta:</span>
+                    <span className="text-xs text-zinc-400">
+                      {new Date(verifiedPass.expiresAt).toLocaleDateString('es-ES')}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs font-bold uppercase text-zinc-400 tracking-wider block mb-1">
+                      Nombre del Amigo (Quien ingresa hoy) *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ej: Carlos Gómez"
+                      value={friendName}
+                      onChange={(e) => setFriendName(e.target.value)}
+                      className="w-full px-4 py-3 bg-zinc-900 border border-white/10 rounded-xl text-white text-sm focus:outline-none placeholder-zinc-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold uppercase text-zinc-400 tracking-wider block mb-1">
+                      WhatsApp del Amigo <span className="text-zinc-500 font-normal normal-case">(opcional, para bienvenida)</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Ej: 593987654321"
+                      value={friendPhone}
+                      onChange={(e) => setFriendPhone(e.target.value)}
+                      className="w-full px-4 py-3 bg-zinc-900 border border-white/10 rounded-xl text-white text-sm focus:outline-none placeholder-zinc-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setVerifiedPass(null)}
+                    className="flex-1 py-3.5 rounded-xl bg-zinc-900 border border-white/10 text-zinc-300 hover:text-white text-sm font-bold transition-all"
+                  >
+                    Volver
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={redeemingPass || !friendName.trim()}
+                    className="flex-1 py-3.5 rounded-xl text-black font-black text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                    style={{ backgroundColor: 'var(--color-primary, #00F5D4)' }}
+                  >
+                    <UserCheck className="w-4 h-4 text-black" />
+                    {redeemingPass ? 'Autorizando...' : 'Conceder Acceso'}
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}

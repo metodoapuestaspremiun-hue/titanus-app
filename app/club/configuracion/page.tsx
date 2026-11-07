@@ -601,6 +601,94 @@ export default function ClubConfig() {
             </div>
           </div>
 
+                  </div>
+
+        {/* Columna Derecha: Conector WhatsApp Evolution API + Entrenadores */}
+{/* Columna Derecha: Conector WhatsApp Evolution API */}
+        <div className="space-y-6">
+          <div className="p-8 rounded-3xl bg-[var(--bg-card,#05101C)] border border-[var(--border-card,rgba(0,245,212,0.15))] space-y-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div
+                  className={`h-12 w-12 rounded-2xl flex items-center justify-center ${
+                    wsStatus === 'connected' ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'
+                  }`}
+                >
+                  <Smartphone className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="font-bold text-white">Canal de WhatsApp</div>
+                  <div className="text-sm text-zinc-400">Línea Oficial</div>
+                </div>
+              </div>
+
+              <div
+                className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest ${
+                  wsStatus === 'connected' ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'
+                }`}
+              >
+                {wsStatus === 'connected' ? (
+                  <>
+                    <CheckCircle className="w-3.5 h-3.5" /> Activo
+                  </>
+                ) : (
+                  <>
+                    <XCircle className="w-3.5 h-3.5" /> Offline
+                  </>
+                )}
+              </div>
+            </div>
+
+            {wsStatus !== 'connected' && (
+              <div className="space-y-4">
+                {!qrCode ? (
+                  <button
+                    onClick={getQrCode}
+                    disabled={loadingQr}
+                    className="w-full text-black p-4 rounded-2xl flex items-center justify-center gap-3 font-bold uppercase tracking-widest transition-all shadow-lg disabled:opacity-50"
+                    style={{ backgroundColor: 'var(--color-primary, #00F5D4)' }}
+                  >
+                    <Smartphone className="w-5 h-5" />
+                    {loadingQr ? 'Generando QR...' : 'Conectar WhatsApp'}
+                  </button>
+                ) : (
+                  <div className="bg-white p-6 rounded-3xl space-y-4 animate-in zoom-in-95 duration-300">
+                    <div className="text-center space-y-2">
+                      <h4 className="font-bold text-black text-lg">Escanea este código QR</h4>
+                      <p className="text-sm text-gray-600">Abre WhatsApp en tu teléfono y escanea</p>
+                    </div>
+                    <div className="flex justify-center">
+                      <img
+                        src={qrCode}
+                        alt="QR"
+                        className="w-64 h-64 border-4 rounded-2xl object-contain"
+                        style={{ borderColor: 'var(--color-primary, #00F5D4)' }}
+                      />
+                    </div>
+                    <button
+                      onClick={() => setQrCode(null)}
+                      className="text-xs text-gray-500 hover:text-black underline w-full text-center"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {wsStatus === 'connected' && (
+              <div className="p-4 rounded-2xl bg-zinc-900 border border-white/5 space-y-2">
+                <span className="text-xs font-bold text-green-400 flex items-center gap-1.5">
+                  <CheckCircle className="w-4 h-4" />
+                  Instancia vinculada y lista para recibir solicitudes QR
+                </span>
+                <p className="text-xs text-zinc-400">
+                  Ambos sistemas (Fidelización y Difusión masiva) están escuchando a través del mismo canal.
+                </p>
+              </div>
+            )}
+          </div>
+
           {/* Gestión de Entrenadores Reales */}
           <div className="p-6 rounded-2xl bg-[var(--bg-card,#05101C)] border border-[var(--border-card,rgba(0,245,212,0.15))] space-y-4">
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
@@ -762,92 +850,6 @@ export default function ClubConfig() {
                 )
               })}
             </div>
-          </div>
-        </div>
-
-        {/* Columna Derecha: Conector WhatsApp Evolution API */}
-        <div className="space-y-6">
-          <div className="p-8 rounded-3xl bg-[var(--bg-card,#05101C)] border border-[var(--border-card,rgba(0,245,212,0.15))] space-y-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div
-                  className={`h-12 w-12 rounded-2xl flex items-center justify-center ${
-                    wsStatus === 'connected' ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'
-                  }`}
-                >
-                  <Smartphone className="w-6 h-6" />
-                </div>
-                <div>
-                  <div className="font-bold text-white">Canal de WhatsApp</div>
-                  <div className="text-sm text-zinc-400">Línea Oficial</div>
-                </div>
-              </div>
-
-              <div
-                className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest ${
-                  wsStatus === 'connected' ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'
-                }`}
-              >
-                {wsStatus === 'connected' ? (
-                  <>
-                    <CheckCircle className="w-3.5 h-3.5" /> Activo
-                  </>
-                ) : (
-                  <>
-                    <XCircle className="w-3.5 h-3.5" /> Offline
-                  </>
-                )}
-              </div>
-            </div>
-
-            {wsStatus !== 'connected' && (
-              <div className="space-y-4">
-                {!qrCode ? (
-                  <button
-                    onClick={getQrCode}
-                    disabled={loadingQr}
-                    className="w-full text-black p-4 rounded-2xl flex items-center justify-center gap-3 font-bold uppercase tracking-widest transition-all shadow-lg disabled:opacity-50"
-                    style={{ backgroundColor: 'var(--color-primary, #00F5D4)' }}
-                  >
-                    <Smartphone className="w-5 h-5" />
-                    {loadingQr ? 'Generando QR...' : 'Conectar WhatsApp'}
-                  </button>
-                ) : (
-                  <div className="bg-white p-6 rounded-3xl space-y-4 animate-in zoom-in-95 duration-300">
-                    <div className="text-center space-y-2">
-                      <h4 className="font-bold text-black text-lg">Escanea este código QR</h4>
-                      <p className="text-sm text-gray-600">Abre WhatsApp en tu teléfono y escanea</p>
-                    </div>
-                    <div className="flex justify-center">
-                      <img
-                        src={qrCode}
-                        alt="QR"
-                        className="w-64 h-64 border-4 rounded-2xl object-contain"
-                        style={{ borderColor: 'var(--color-primary, #00F5D4)' }}
-                      />
-                    </div>
-                    <button
-                      onClick={() => setQrCode(null)}
-                      className="text-xs text-gray-500 hover:text-black underline w-full text-center"
-                    >
-                      Cancelar
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {wsStatus === 'connected' && (
-              <div className="p-4 rounded-2xl bg-zinc-900 border border-white/5 space-y-2">
-                <span className="text-xs font-bold text-green-400 flex items-center gap-1.5">
-                  <CheckCircle className="w-4 h-4" />
-                  Instancia vinculada y lista para recibir solicitudes QR
-                </span>
-                <p className="text-xs text-zinc-400">
-                  Ambos sistemas (Fidelización y Difusión masiva) están escuchando a través del mismo canal.
-                </p>
-              </div>
-            )}
           </div>
         </div>
       </div>

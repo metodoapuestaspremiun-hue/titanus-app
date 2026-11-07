@@ -319,13 +319,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ status: 'not_club_command' })
     }
 
+    // -------------------------------------------------------------
+    // CONSUMO ATÓMICO DEL TOKEN QR (SEGURIDAD ANTIFRAUDE)
+    // -------------------------------------------------------------
     // Si es un comando directo permanente (MEM, RET, EVAL), NO requiere token efímero
     const isPermanentCommand = tokenExtracted === 'MEM' || tokenExtracted === 'RET' || tokenExtracted === 'EVAL'
 
     if (!isPermanentCommand) {
-      // -------------------------------------------------------------
-      // CONSUMO ATÓMICO DEL TOKEN QR (SEGURIDAD ANTIFRAUDE PARA EFÍMEROS)
-      // -------------------------------------------------------------
       const validQr = await prisma.qrToken.findFirst({
         where: {
           tenantId: tenant.id,
@@ -389,6 +389,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ status: 'coaches_listed' })
     }
 
+    // -------------------------------------------------------------
     // -------------------------------------------------------------
     // FLUJO 2: PAGO DE MENSUALIDAD (QR: MEM) -> REQUIERE APROBACIÓN EN CAJA
     // -------------------------------------------------------------

@@ -88,6 +88,7 @@ model Tenant {
   qrTokens                QrToken[]
   membershipPlans         MembershipPlan[]
   walletTransactions      WalletTransaction[]
+  friendPasses            FriendPass[]
 }
 
 model SuperAdmin {
@@ -130,6 +131,7 @@ model Customer {
   wallets          Wallet[]
   evaluations      Evaluation[]
   payments         Payment[]
+  friendPasses     FriendPass[]
 
   @@unique([tenantId, phone])
   @@index([tenantId])
@@ -232,4 +234,25 @@ model MembershipPlan {
   tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
+}
+
+model FriendPass {
+  id              String    @id @default(uuid())
+  tenantId        String
+  sponsorId       String    // ID del socio que compró la mensualidad
+  paymentId       String?   // ID del pago que originó el pase
+  code            String    @unique // Ej: AMIGO-7K9X2
+  status          String    @default("ACTIVE") // ACTIVE | REDEEMED | EXPIRED
+  redeemedByName  String?   // Nombre del amigo que asistió
+  redeemedByPhone String?   // WhatsApp del amigo
+  redeemedAt      DateTime? // Fecha en que ingresó al gym
+  expiresAt       DateTime  // Vigencia (ej. 30 días)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sponsor         Customer  @relation(fields: [sponsorId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, status])
+  @@index([code])
 }

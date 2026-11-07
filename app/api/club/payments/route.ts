@@ -106,14 +106,46 @@ export async function POST(req: Request) {
         },
       })
 
-      return { updatedPayment, newBalance }
+      // 5. Si es pago de MENSUALIDAD (MEMBERSHIP), generar 2 PASES DE AMIGO (FriendPass)
+      const friendPassCodes: string[] = []
+      if (payment.type === 'MEMBERSHIP') {
+        const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 días de vigencia
+        for (let i = 0; i < 2; i++) {
+          const randomSuffix = Math.random().toString(36).substring(2, 7).toUpperCase()
+          const code = `AMIGO-${randomSuffix}`
+          await tx.friendPass.create({
+            data: {
+              tenantId: payment.tenantId,
+              sponsorId: payment.customerId,
+              paymentId: payment.id,
+              code,
+              status: 'ACTIVE',
+              expiresAt,
+            },
+          })
+          friendPassCodes.push(code)
+        }
+      }
+
+      return { updatedPayment, newBalance, friendPassCodes }
     })
 
     const tipo = payment.type === 'MEMBERSHIP' ? 'cuota mensual' : 'compra en barra'
     const prodLine = productDescription ? `\n📦 Producto: *${productDescription}*` : ''
+    
+    // Mensaje de Pases de Amigo si aplica
+    let passesSection = ''
+    if (result.friendPassCodes && result.friendPassCodes.length > 0) {
+      passesSection = `\n\n🎁 *BENEFICIO EXCLUSIVO: 2 PASES DE CORTESÍA (1 DÍA)*\n` +
+        `¡Invita a 2 amigos a entrenar gratis contigo! Cada amigo debe dictar su código único en recepción al llegar:\n\n` +
+        `🎟️ *Pase 1:* \`${result.friendPassCodes[0]}\`\n` +
+        `🎟️ *Pase 2:* \`${result.friendPassCodes[1]}\`\n\n` +
+        `_(Válidos por 30 días · Un solo uso por código)_`
+    }
+
     await sendWhatsAppMessage(
       payment.customer.phone,
-      `✅ *¡Pago Aprobado en Caja!*\n\n🏋️ *${payment.tenant.name}*\n\n💵 ${tipo.charAt(0).toUpperCase() + tipo.slice(1)}: *$${amount.toFixed(2)} USD*${prodLine}\n🎁 Cashback acreditado: *+$${cashbackAmt.toFixed(2)} USD* (${cashbackPct}%)\n💰 Tu nuevo saldo en Monedero: *$${result.newBalance.toFixed(2)} USD*\n\n¡Gracias por tu visita! Puedes canjear tu saldo acumulado en recepción. 💪`,
+      `✅ *¡Pago Aprobado en Caja!*\n\n🏋️ *${payment.tenant.name}*\n\n💵 ${tipo.charAt(0).toUpperCase() + tipo.slice(1)}: *$${amount.toFixed(2)} USD*${prodLine}\n🎁 Cashback acreditado: *+$${cashbackAmt.toFixed(2)} USD* (${cashbackPct}%)\n💰 Tu nuevo saldo en Monedero: *$${result.newBalance.toFixed(2)} USD*${passesSection}\n\n¡Gracias por tu visita! Puedes canjear tu saldo acumulado en recepción. 💪`,
       instanceName
     )
 
