@@ -15,7 +15,9 @@ import {
   Edit2,
   Upload,
   Check,
-  X
+  X,
+  CreditCard,
+  Calendar,
 } from 'lucide-react'
 import axios from 'axios'
 import { QRCodeSVG } from 'qrcode.react'
@@ -44,6 +46,19 @@ export default function ClubConfig() {
   const [editName, setEditName] = useState('')
   const [editAvatarUrl, setEditAvatarUrl] = useState('')
   const [updatingCoach, setUpdatingCoach] = useState(false)
+
+  // Gestión de Planes de Membresía
+  const [plans, setPlans] = useState<any[]>([])
+  const [loadingPlans, setLoadingPlans] = useState(false)
+  const [newPlanName, setNewPlanName] = useState('')
+  const [newPlanPrice, setNewPlanPrice] = useState('')
+  const [newPlanDays, setNewPlanDays] = useState('30')
+  const [addingPlan, setAddingPlan] = useState(false)
+  const [editingPlanId, setEditingPlanId] = useState<string | null>(null)
+  const [editPlanName, setEditPlanName] = useState('')
+  const [editPlanPrice, setEditPlanPrice] = useState('')
+  const [editPlanDays, setEditPlanDays] = useState('30')
+  const [updatingPlan, setUpdatingPlan] = useState(false)
 
   // Dominio base de la app para los QR impresos
   const [baseUrl, setBaseUrl] = useState('https://titanus-app.vercel.app')
@@ -83,6 +98,85 @@ export default function ClubConfig() {
       setCoaches(res.data.coaches || [])
     } catch (e) {
       console.error('Error cargando coaches:', e)
+    }
+  }
+
+  const loadPlans = async () => {
+    try {
+      setLoadingPlans(true)
+      const res = await axios.get('/api/club/plans')
+      setPlans(res.data.plans || [])
+    } catch (e) {
+      console.error('Error cargando planes:', e)
+    } finally {
+      setLoadingPlans(false)
+    }
+  }
+
+  const handleAddPlan = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newPlanName.trim() || !newPlanPrice) return
+    try {
+      setAddingPlan(true)
+      await axios.post('/api/club/plans', {
+        name: newPlanName.trim(),
+        price: parseFloat(newPlanPrice),
+        durationDays: parseInt(newPlanDays) || 30,
+      })
+      setNewPlanName('')
+      setNewPlanPrice('')
+      setNewPlanDays('30')
+      loadPlans()
+    } catch (e: any) {
+      alert('Error agregando plan: ' + (e.response?.data?.error || e.message))
+    } finally {
+      setAddingPlan(false)
+    }
+  }
+
+  const handleDeletePlan = async (id: string) => {
+    if (!confirm('¿Seguro que deseas eliminar este plan de membresía?')) return
+    try {
+      await axios.delete(`/api/club/plans?id=${id}`)
+      loadPlans()
+    } catch (e: any) {
+      alert('Error eliminando plan: ' + (e.response?.data?.error || e.message))
+    }
+  }
+
+  const startEditPlan = (plan: any) => {
+    setEditingPlanId(plan.id)
+    setEditPlanName(plan.name)
+    setEditPlanPrice(String(plan.price))
+    setEditPlanDays(String(plan.durationDays || 30))
+  }
+
+  const cancelEditPlan = () => {
+    setEditingPlanId(null)
+    setEditPlanName('')
+    setEditPlanPrice('')
+    setEditPlanDays('30')
+  }
+
+  const handleUpdatePlan = async (id: string) => {
+    if (!editPlanName.trim() || !editPlanPrice) {
+      alert('Nombre y precio son obligatorios')
+      return
+    }
+    try {
+      setUpdatingPlan(true)
+      await axios.put('/api/club/plans', {
+        id,
+        name: editPlanName.trim(),
+        price: parseFloat(editPlanPrice),
+        durationDays: parseInt(editPlanDays) || 30,
+      })
+      cancelEditPlan()
+      loadPlans()
+    } catch (e: any) {
+      alert('Error actualizando plan: ' + (e.response?.data?.error || e.message))
+    } finally {
+      setUpdatingPlan(false)
     }
   }
 
@@ -187,6 +281,7 @@ export default function ClubConfig() {
     }
     loadConfig()
     loadCoaches()
+    loadPlans()
     checkWhatsAppStatus()
 
     const interval = setInterval(checkWhatsAppStatus, 10000)
@@ -341,6 +436,169 @@ export default function ClubConfig() {
                 </div>
               </div>
             )}
+          </div>
+
+          {/* Gestión de Planes de Membresía */}
+          <div className="p-6 rounded-2xl bg-[var(--bg-card,#05101C)] border border-[var(--border-card,rgba(0,245,212,0.15))] space-y-4">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div className="flex items-center gap-2">
+                <CreditCard className="w-5 h-5" style={{ color: 'var(--color-primary, #00F5D4)' }} />
+                <h2 className="text-lg font-bold text-white">Planes de Membresía</h2>
+              </div>
+              <span className="text-xs text-zinc-500">{plans.length} activos</span>
+            </div>
+
+            {/* Formulario para agregar nuevo plan */}
+            <form onSubmit={handleAddPlan} className="space-y-3 bg-zinc-900/60 p-4 rounded-xl border border-white/5">
+              <div className="text-xs font-bold text-zinc-400">Crear Nuevo Plan</div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <input
+                  type="text"
+                  placeholder="Ej: Mensualidad VIP"
+                  value={newPlanName}
+                  onChange={(e) => setNewPlanName(e.target.value)}
+                  className="px-3 py-2 bg-black border border-white/10 rounded-xl text-xs text-white focus:outline-none placeholder-zinc-500"
+                />
+                <div className="relative">
+                  <span className="absolute left-3 top-2 text-xs text-zinc-400">$</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="Precio USD"
+                    value={newPlanPrice}
+                    onChange={(e) => setNewPlanPrice(e.target.value)}
+                    className="w-full pl-7 pr-3 py-2 bg-black border border-white/10 rounded-xl text-xs text-white focus:outline-none placeholder-zinc-500"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="1"
+                    placeholder="Días (ej: 30)"
+                    value={newPlanDays}
+                    onChange={(e) => setNewPlanDays(e.target.value)}
+                    className="w-full px-3 py-2 bg-black border border-white/10 rounded-xl text-xs text-white focus:outline-none placeholder-zinc-500"
+                  />
+                  <button
+                    type="submit"
+                    disabled={addingPlan}
+                    className="px-4 py-2 text-black font-bold text-xs rounded-xl transition-all flex items-center gap-1 shrink-0"
+                    style={{ backgroundColor: 'var(--color-primary, #00F5D4)' }}
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>{addingPlan ? '...' : 'Añadir'}</span>
+                  </button>
+                </div>
+              </div>
+            </form>
+
+            {/* Lista de planes de membresía */}
+            <div className="divide-y divide-white/10 max-h-80 overflow-y-auto space-y-1">
+              {plans.length === 0 ? (
+                <div className="text-center py-6 text-xs text-zinc-500">
+                  No hay planes creados aún. Añade uno arriba (ej: Mensualidad $30.00).
+                </div>
+              ) : (
+                plans.map((p) => {
+                  const isEditing = editingPlanId === p.id
+                  const cashbackAmt = ((Number(p.price) * membershipCashback) / 100).toFixed(2)
+
+                  return (
+                    <div key={p.id} className="py-2.5">
+                      {isEditing ? (
+                        <div className="p-3 bg-zinc-900 rounded-xl border border-white/10 space-y-2.5 animate-in fade-in">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-white">Editar Plan</span>
+                            <button
+                              type="button"
+                              onClick={cancelEditPlan}
+                              className="text-zinc-500 hover:text-white text-xs p-1"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                            <input
+                              type="text"
+                              value={editPlanName}
+                              onChange={(e) => setEditPlanName(e.target.value)}
+                              className="px-3 py-1.5 bg-black border border-white/10 rounded-lg text-xs text-white focus:outline-none"
+                            />
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={editPlanPrice}
+                              onChange={(e) => setEditPlanPrice(e.target.value)}
+                              className="px-3 py-1.5 bg-black border border-white/10 rounded-lg text-xs text-white focus:outline-none"
+                            />
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="number"
+                                value={editPlanDays}
+                                onChange={(e) => setEditPlanDays(e.target.value)}
+                                className="w-full px-3 py-1.5 bg-black border border-white/10 rounded-lg text-xs text-white focus:outline-none"
+                              />
+                              <button
+                                onClick={() => handleUpdatePlan(p.id)}
+                                disabled={updatingPlan}
+                                className="px-3 py-1.5 bg-green-500 hover:bg-green-400 text-black font-bold text-xs rounded-lg transition-colors flex items-center gap-1"
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between p-2 rounded-xl hover:bg-white/5 transition-all">
+                          <div className="flex items-center gap-3">
+                            <div
+                              className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs border"
+                              style={{
+                                color: 'var(--color-primary, #00F5D4)',
+                                backgroundColor: 'color-mix(in srgb, var(--color-primary, #00F5D4) 10%, transparent)',
+                                borderColor: 'color-mix(in srgb, var(--color-primary, #00F5D4) 20%, transparent)',
+                              }}
+                            >
+                              ${Number(p.price).toFixed(0)}
+                            </div>
+                            <div>
+                              <span className="text-sm font-bold text-white block">{p.name}</span>
+                              <div className="flex items-center gap-2 text-xs text-zinc-400">
+                                <span>${Number(p.price).toFixed(2)} USD</span>
+                                <span>&bull;</span>
+                                <span>{p.durationDays} días</span>
+                                <span>&bull;</span>
+                                <span style={{ color: 'var(--color-primary, #00F5D4)' }} className="font-bold">
+                                  +${cashbackAmt} cashback ({membershipCashback}%)
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              onClick={() => startEditPlan(p)}
+                              title="Editar plan"
+                              className="p-1.5 rounded-lg bg-zinc-900 text-zinc-400 hover:text-white hover:bg-white/10 transition-all"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeletePlan(p.id)}
+                              title="Eliminar plan"
+                              className="p-1.5 rounded-lg bg-zinc-900 text-zinc-400 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })
+              )}
+            </div>
           </div>
 
           {/* Gestión de Entrenadores Reales */}

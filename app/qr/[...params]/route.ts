@@ -44,15 +44,29 @@ export async function GET(
     }
 
     const { searchParams } = new URL(req.url)
-    const slugQuery = searchParams.get('slug')?.toLowerCase() || targetSlug
+    const slugQuery = searchParams.get('slug')?.toLowerCase().trim() || targetSlug?.trim()
     const existingToken = searchParams.get('token')
 
     let tenant = null
     if (slugQuery) {
+      // 1. Buscar por slug exacto
       tenant = await prisma.tenant.findUnique({ where: { slug: slugQuery } })
+
+      // 2. Si no coincide, buscar por nombre de instancia Evolution o por nombre insensible a mayúsculas
+      if (!tenant) {
+        tenant = await prisma.tenant.findFirst({
+          where: {
+            OR: [
+              { evolutionInstanceName: slugQuery },
+              { evolutionInstanceName: `gym_${slugQuery.replace(/-/g, '_')}` },
+              { name: { equals: slugQuery } },
+            ],
+          },
+        })
+      }
     }
 
-    // Si no vino slug, intentar resolver por cookie de sesión
+    // 3. Si no vino slug, intentar resolver por cookie de sesión
     if (!tenant) {
       const cookieHeader = req.headers.get('cookie')
       if (cookieHeader) {
@@ -70,14 +84,39 @@ export async function GET(
       }
     }
 
-    // Fallback garantizado a Titanus Gym para carteles legacy ya impresos
-    if (!tenant) {
+    // 4. Si aún no está en BD pero vino un slug, consultar directamente a Evolution API
+    let liveEvoPhone: string | null = null
+    const evoUrl = process.env.EVOLUTION_API_URL || 'http://178.238.238.158:8080'
+    const evoKey = process.env.EVOLUTION_API_KEY || '42a447c1-3d74-4b52-9571-042c174f7621'
+
+    if (!tenant && slugQuery) {
+      try {
+        const evoRes = await fetch(`${evoUrl}/instance/fetchInstances`, {
+          headers: { apikey: evoKey },
+          cache: 'no-store',
+        })
+        const instances = await evoRes.json()
+        const list = Array.isArray(instances) ? instances : instances?.value || []
+        const matched = list.find(
+          (i: any) =>
+            i.name?.toLowerCase() === slugQuery ||
+            i.name?.toLowerCase() === `gym_${slugQuery.replace(/-/g, '_')}`
+        )
+        if (matched && matched.ownerJid) {
+          liveEvoPhone = matched.ownerJid.split('@')[0].replace(/[^0-9]/g, '')
+        }
+      } catch (e) {
+        console.error('Error buscando instancia en fallback:', e)
+      }
+    }
+
+    // 5. Fallback a Titanus Gym si no se pudo determinar
+    if (!tenant && !liveEvoPhone) {
       tenant = await prisma.tenant.findUnique({ where: { slug: 'titanus-gym' } })
     }
 
-    if (!tenant) {
-      return new Response('Gimnasio no configurado', { status: 404 })
-    }
+    // Si aún así no hay tenant ni número, usar el teléfono default en lugar de tirar error 404
+    const resolvedPhone = liveEvoPhone || tenant?.whatsappPhone || '593986962872'
 
     let token = existingToken
     if (!token) {
@@ -88,14 +127,16 @@ export async function GET(
       // 2. Guardar en la tabla QrToken con TTL de 2 minutos
       const expiresAt = new Date(Date.now() + 120 * 1000)
 
-      await prisma.qrToken.create({
-        data: {
-          tenantId: tenant.id,
-          type: qrType,
-          token: token,
-          expiresAt: expiresAt,
-        },
-      })
+      if (tenant) {
+        await prisma.qrToken.create({
+          data: {
+            tenantId: tenant.id,
+            type: qrType,
+            token: token,
+            expiresAt: expiresAt,
+          },
+        })
+      }
     }
 
     // 3. Obtener dinámicamente el número REAL conectado a la instancia en Evolution API
@@ -103,15 +144,16 @@ export async function GET(
 
     try {
       const evoUrl =
-        tenant.evolutionApiUrl ||
+        tenant?.evolutionApiUrl ||
         process.env.EVOLUTION_API_URL ||
         'http://178.238.238.158:8080'
       const evoKey =
-        tenant.evolutionApiKey ||
+        tenant?.evolutionApiKey ||
         process.env.EVOLUTION_API_KEY ||
         '42a447c1-3d74-4b52-9571-042c174f7621'
       const evoInst =
-        tenant.evolutionInstanceName ||
+        tenant?.evolutionInstanceName ||
+        slugQuery ||
         process.env.EVOLUTION_INSTANCE_NAME ||
         'gym_bot'
 
@@ -133,9 +175,10 @@ export async function GET(
     // Fallback al teléfono de base de datos o default
     if (!whatsappPhone) {
       whatsappPhone =
-        tenant.whatsappPhone && tenant.whatsappPhone.length > 8
+        resolvedPhone ||
+        (tenant?.whatsappPhone && tenant.whatsappPhone.length > 8
           ? tenant.whatsappPhone
-          : '593983776219'
+          : '593986962872')
     }
 
     const messageText = `Hola, mi código es ${token}`

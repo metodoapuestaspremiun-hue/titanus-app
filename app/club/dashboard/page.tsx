@@ -262,26 +262,27 @@ export default function ReceptionDashboard() {
   const openDynamicQr = async (type: 'MEMBERSHIP' | 'RETAIL' | 'EVALUATION', title: string) => {
     try {
       setGeneratingQr(true)
-      
-      // Mapear el tipo a la ruta corta del servidor
-      const typeSegment = type === 'MEMBERSHIP' ? 'm' : type === 'RETAIL' ? 't' : 'c'
-      const tenantSlug = tenantConfig?.slug || 'club'
-      
-      // URL FÍSICA FIJA E IMPRIMIBLE:
-      // El QR impreso NUNCA cambia su diseño. Siempre apunta a esta URL fija.
-      // Cuando el socio lo escanea, el servidor genera el token al vuelo y lo manda al WhatsApp de su instancia.
-      const printableFixedUrl = `${window.location.origin}/qr/${tenantSlug}/${typeSegment}`
+      const res = await axios.post('/api/club/qr/generate', { type })
+      if (res.data.success) {
+        if (res.data.whatsappPhone && tenantConfig) {
+          setTenantConfig({ ...tenantConfig, whatsappPhone: res.data.whatsappPhone })
+        }
 
-      setQrModal({
-        open: true,
-        type,
-        title,
-        token: `${typeSegment.toUpperCase()}-AUTO`,
-        qrUrl: printableFixedUrl,
-        waUrl: printableFixedUrl,
-      })
+        // Enlace NATIVO DIRECTO de WhatsApp:
+        // https://wa.me/593967491847?text=Hola,%20mi%20código%20es%20MEM-XXXXXX
+        const directWhatsAppUrl = res.data.waUrl
+
+        setQrModal({
+          open: true,
+          type,
+          title,
+          token: res.data.token,
+          qrUrl: directWhatsAppUrl,
+          waUrl: directWhatsAppUrl,
+        })
+      }
     } catch (e: any) {
-      alert('Error mostrando código QR: ' + (e.response?.data?.error || e.message))
+      alert('Error generando código QR dinámico: ' + (e.response?.data?.error || e.message))
     } finally {
       setGeneratingQr(false)
     }
@@ -859,7 +860,7 @@ export default function ReceptionDashboard() {
             >
               <QRCodeSVG
                 id="qr-code-svg"
-                value={qrModal.qrUrl || qrModal.waUrl || `${window.location.origin}/qr/${tenantConfig?.slug || 'club'}/m?token=${qrModal.token}`}
+                value={qrModal.waUrl || qrModal.qrUrl}
                 size={210}
                 level="M"
                 includeMargin={true}
@@ -875,20 +876,20 @@ export default function ReceptionDashboard() {
                   color: 'var(--color-primary, #00F5D4)'
                 }}
               >
-                QR Imprimible Oficial: /{tenantConfig?.slug || 'club'}/{qrModal.type === 'MEMBERSHIP' ? 'm' : qrModal.type === 'RETAIL' ? 't' : 'c'}
+                Código Dinámico: {qrModal.token}
               </span>
               <button
                 onClick={downloadQrCode}
                 className="p-1 rounded-lg bg-zinc-900 border border-white/10 text-zinc-300 hover:text-white transition-all text-xs flex items-center gap-1 px-2"
-                title="Descargar imagen PNG del QR para imprimir en acrílico o mostrador"
+                title="Descargar imagen PNG del QR"
               >
                 <Download className="w-3.5 h-3.5" style={{ color: 'var(--color-primary, #00F5D4)' }} />
-                Descargar PNG para Imprimir
+                Descargar PNG
               </button>
             </div>
 
             <p className="text-xs text-zinc-400 mb-3">
-              Puedes imprimir este código en tu mostrador o acrílico. Cada vez que un socio lo escanea con su cámara, el sistema le genera su código único al vuelo y lo conecta al WhatsApp de este gimnasio.
+              Al escanear con la cámara del celular se abre WhatsApp directamente en la instancia de este gimnasio. Código válido por 15 minutos.
             </p>
 
             <a
