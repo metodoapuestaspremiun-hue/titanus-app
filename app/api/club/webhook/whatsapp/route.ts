@@ -375,29 +375,30 @@ export async function POST(req: Request) {
     // -------------------------------------------------------------
     // CONSUMO ATÓMICO DEL TOKEN QR (SEGURIDAD ANTIFRAUDE & ANTISPAM)
     // -------------------------------------------------------------
-    // Si viene un token generado (ej: MEM-SUR-7X9B o MEM-8F2K), se valida su existencia y tiempo de vida
+    // Comandos directos permanentes o códigos generados:
     const isPermanentBareCommand = tokenExtracted === 'MEM' || tokenExtracted === 'RET' || tokenExtracted === 'EVAL'
 
     if (!isPermanentBareCommand) {
+      // Buscar token activo en base de datos
       const validQr = await prisma.qrToken.findFirst({
         where: {
           tenantId: tenant.id,
           token: tokenExtracted,
-          expiresAt: { gt: new Date() },
         },
       })
 
-      if (!validQr) {
+      if (validQr) {
+        // Quemar el token inmediatamente de la base de datos (Un solo uso garantizado)
+        await prisma.qrToken.delete({ where: { id: validQr.id } })
+      } else {
+        // Si el código ya no está en BD (ya se quemó o expiró)
         await sendWhatsAppMessage(
           phone,
-          `⚠️ *Código QR no válido o ya utilizado*\n\nEste código ya fue consumido o su tiempo de escaneo expiró (3 minutos). Por favor vuelve a escanear el cartel oficial en la recepción del gimnasio.`,
+          `⚠️ *Código QR ya utilizado o expirado*\n\nEste código ya fue procesado con éxito o su tiempo expiró. Por favor vuelve a escanear el cartel en la recepción del gimnasio.`,
           evoInstance
         )
         return NextResponse.json({ status: 'qr_expired_or_invalid' })
       }
-
-      // Quemar el token inmediatamente de la base de datos (Un solo uso garantizado)
-      await prisma.qrToken.delete({ where: { id: validQr.id } })
     }
 
     // Determinar la acción base: EVAL, MEM o RET

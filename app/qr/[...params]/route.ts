@@ -116,10 +116,10 @@ export async function GET(
       }
     }
 
-    // 2. Generar token criptográfico efímero de un solo uso (TTL: 3 minutos)
+    // 2. Generar token criptográfico efímero de un solo uso (TTL: 15 minutos de holgura)
     const randomSuffix = crypto.randomBytes(3).toString('hex').toUpperCase()
     const dynamicToken = `${prefix}${branchCodeTag}-${randomSuffix}` // ej: MEM-SUR-7A9B o MEM-8F3K
-    const expiresAt = new Date(Date.now() + 180 * 1000)
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000)
 
     await prisma.qrToken.create({
       data: {
