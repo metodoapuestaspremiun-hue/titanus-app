@@ -16,7 +16,25 @@ import {
   Upload,
   Check,
   AlertCircle,
+  MapPin,
+  Plus,
+  Crown,
+  Download,
 } from 'lucide-react'
+
+interface BranchItem {
+  id: string
+  name: string
+  code: string
+  address: string | null
+  phone: string | null
+  isMain: boolean
+  isActive: boolean
+  _count?: {
+    staff: number
+    payments: number
+  }
+}
 
 export default function EditTenantPage() {
   const params = useParams()
@@ -47,6 +65,13 @@ export default function EditTenantPage() {
   const [referralCommPct, setReferralCommPct] = useState(10)
   const [storeReferralCommPct, setStoreReferralCommPct] = useState(5)
   const [logoUrl, setLogoUrl] = useState<string | null>(null)
+
+  // Sucursales / Branches
+  const [branches, setBranches] = useState<BranchItem[]>([])
+  const [newBranchName, setNewBranchName] = useState('')
+  const [newBranchAddress, setNewBranchAddress] = useState('')
+  const [creatingBranch, setCreatingBranch] = useState(false)
+  const [deletingBranchId, setDeletingBranchId] = useState<string | null>(null)
 
   // Stats
   const [stats, setStats] = useState({
@@ -85,6 +110,9 @@ export default function EditTenantPage() {
         setReferralCommPct(Number(t.referralCommPct) || 10)
         setStoreReferralCommPct(Number(t.storeReferralCommPct) || 5)
         setLogoUrl(t.logoUrl || null)
+        if (t.branches) {
+          setBranches(t.branches)
+        }
 
         if (t._count) {
           setStats(t._count)
@@ -205,6 +233,61 @@ export default function EditTenantPage() {
     }
   }
 
+  const handleAddBranch = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newBranchName.trim()) return
+
+    try {
+      setCreatingBranch(true)
+      const res = await fetch(`/api/superadmin/tenants/${tenantId}/branches`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newBranchName.trim(),
+          address: newBranchAddress.trim() || undefined,
+        }),
+      })
+
+      const data = await res.json()
+      if (res.ok && data.success) {
+        setBranches((prev) => [...prev, data.branch])
+        setNewBranchName('')
+        setNewBranchAddress('')
+        setMessage({ type: 'success', text: `Sucursal "${data.branch.name}" creada exitosamente.` })
+      } else {
+        throw new Error(data.error || 'Error al crear sucursal')
+      }
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message })
+    } finally {
+      setCreatingBranch(false)
+    }
+  }
+
+  const handleDeleteBranch = async (branchId: string, branchName: string) => {
+    const conf = window.confirm(`¿Estás seguro de eliminar la sucursal "${branchName}"?`)
+    if (!conf) return
+
+    try {
+      setDeletingBranchId(branchId)
+      const res = await fetch(`/api/superadmin/tenants/${tenantId}/branches?branchId=${branchId}`, {
+        method: 'DELETE',
+      })
+
+      const data = await res.json()
+      if (res.ok && data.success) {
+        setBranches((prev) => prev.filter((b) => b.id !== branchId))
+        setMessage({ type: 'success', text: `Sucursal "${branchName}" eliminada.` })
+      } else {
+        throw new Error(data.error || 'Error al eliminar sucursal')
+      }
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message })
+    } finally {
+      setDeletingBranchId(null)
+    }
+  }
+
   if (loading) {
     return (
       <div className="py-20 text-center text-zinc-500">
@@ -237,13 +320,25 @@ export default function EditTenantPage() {
           </div>
         </div>
 
-        {/* Quick summary stats */}
-        <div className="flex items-center gap-2 text-xs text-zinc-400 bg-black/40 px-3.5 py-2 rounded-xl border border-[var(--border-card,rgba(0,245,212,0.15))] font-mono">
-          <span>{stats.customers} socios</span>
-          <span>•</span>
-          <span>{stats.staff} staff</span>
-          <span>•</span>
-          <span>{stats.payments} pagos</span>
+        {/* Quick summary stats & Export Button */}
+        <div className="flex items-center gap-3">
+          <a
+            href={`/api/superadmin/tenants/${tenantId}/export`}
+            download
+            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[#00F5D4]/10 hover:bg-[#00F5D4]/20 text-[#00F5D4] border border-[#00F5D4]/30 text-xs font-bold transition-all shadow-sm"
+            title="Descargar base de datos completa organizada por sedes"
+          >
+            <Download className="w-4 h-4" />
+            <span>Descargar Base de Datos</span>
+          </a>
+
+          <div className="flex items-center gap-2 text-xs text-zinc-400 bg-black/40 px-3.5 py-2 rounded-xl border border-[var(--border-card,rgba(0,245,212,0.15))] font-mono">
+            <span>{stats.customers} socios</span>
+            <span>•</span>
+            <span>{stats.staff} staff</span>
+            <span>•</span>
+            <span>{stats.payments} pagos</span>
+          </div>
         </div>
       </div>
 
@@ -556,6 +651,105 @@ export default function EditTenantPage() {
                   className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-[#00F5D4]"
                 />
               </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 6. SUCURSALES / SEDES FÍSICAS */}
+        <div className="p-6 rounded-2xl bg-[var(--bg-card,#05101C)] border border-[var(--border-card,rgba(0,245,212,0.15))] space-y-5">
+          <div className="flex items-center justify-between border-b border-white/5 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-xl bg-[#00F5D4]/10 text-[#00F5D4]">
+                <MapPin className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">6. Sucursales / Sedes Físicas</h3>
+                <p className="text-xs text-zinc-400">
+                  Sedes que pertenecen a esta cuenta. Cada una tiene su propio código e identificación.
+                </p>
+              </div>
+            </div>
+            <span className="text-xs font-mono font-bold text-zinc-400 bg-white/5 px-3 py-1 rounded-full border border-white/10">
+              {branches.length} {branches.length === 1 ? 'sucursal' : 'sucursales'}
+            </span>
+          </div>
+
+          {/* Lista de Sucursales */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+            {branches.map((b) => (
+              <div
+                key={b.id}
+                className="p-4 rounded-xl bg-zinc-900/80 border border-white/10 flex flex-col justify-between space-y-3 relative overflow-hidden"
+              >
+                {b.isMain && (
+                  <div className="absolute top-2 right-2 flex items-center gap-1 text-[10px] font-black uppercase text-amber-400 bg-amber-400/10 border border-amber-400/20 px-2 py-0.5 rounded-full">
+                    <Crown className="w-3 h-3" />
+                    <span>Matriz</span>
+                  </div>
+                )}
+                <div>
+                  <div className="flex items-center gap-2">
+                    <MapPin className="w-4 h-4 text-[#00F5D4] shrink-0" />
+                    <span className="font-bold text-white text-sm truncate">{b.name}</span>
+                  </div>
+                  <span className="text-[11px] font-mono text-zinc-400 block mt-1">
+                    Código: <span className="text-white font-bold">{b.code}</span>
+                  </span>
+                  {b.address && (
+                    <p className="text-xs text-zinc-500 mt-1 line-clamp-1">{b.address}</p>
+                  )}
+                  {b._count && (
+                    <div className="flex items-center gap-3 text-[11px] text-zinc-400 mt-2 pt-2 border-t border-white/5">
+                      <span>👥 {b._count.staff} coaches</span>
+                      <span>💳 {b._count.payments} pagos</span>
+                    </div>
+                  )}
+                </div>
+
+                {!b.isMain && (
+                  <button
+                    type="button"
+                    disabled={deletingBranchId === b.id}
+                    onClick={() => handleDeleteBranch(b.id, b.name)}
+                    className="self-end text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10 px-2 py-1 rounded-lg transition-colors flex items-center gap-1 disabled:opacity-50"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                    <span>Eliminar</span>
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Formulario Agregar Nueva Sucursal */}
+          <div className="pt-3 border-t border-white/5">
+            <span className="text-xs font-bold text-zinc-300 block mb-2">
+              + Agregar Nueva Sucursal a este Gimnasio
+            </span>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <input
+                type="text"
+                placeholder="Nombre de la sede (ej. Norte, El Valle, Mall...)"
+                value={newBranchName}
+                onChange={(e) => setNewBranchName(e.target.value)}
+                className="flex-1 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-white text-xs focus:outline-none focus:border-[#00F5D4]"
+              />
+              <input
+                type="text"
+                placeholder="Dirección (opcional)"
+                value={newBranchAddress}
+                onChange={(e) => setNewBranchAddress(e.target.value)}
+                className="flex-1 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5 text-white text-xs focus:outline-none focus:border-[#00F5D4]"
+              />
+              <button
+                type="button"
+                disabled={creatingBranch || !newBranchName.trim()}
+                onClick={handleAddBranch}
+                className="px-4 py-2.5 rounded-xl bg-[#00F5D4] hover:bg-[#00e5ff] text-black text-xs font-bold transition-all flex items-center justify-center gap-1.5 shrink-0 disabled:opacity-50"
+              >
+                <Plus className="w-4 h-4 text-black" />
+                <span>{creatingBranch ? 'Guardando...' : 'Agregar Sede'}</span>
+              </button>
             </div>
           </div>
         </div>

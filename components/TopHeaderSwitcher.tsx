@@ -3,16 +3,31 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Sparkles, MessageSquare, Menu } from "lucide-react";
-import { useState, useEffect } from "react";
+import { Sparkles, MessageSquare, Menu, MapPin, ChevronDown, Check, Loader2 } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
 import { useTheme } from "@/components/ThemeProvider";
 import ClubSidebar from "@/components/ClubSidebar";
 import Sidebar from "@/components/Sidebar";
+
+interface Branch {
+  id: string
+  name: string
+  code: string
+  isMain: boolean
+  isActive: boolean
+  _count?: { staff: number; payments: number }
+}
 
 export default function TopHeaderSwitcher() {
   const pathname = usePathname();
   const isClub = pathname?.startsWith("/club");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Branch switcher state
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [branchDropdownOpen, setBranchDropdownOpen] = useState(false);
+  const [switchingBranch, setSwitchingBranch] = useState(false);
+  const branchDropdownRef = useRef<HTMLDivElement>(null);
 
   // Leer el branding del ThemeProvider (ya resuelto en el servidor — sin flash)
   const theme = useTheme();
@@ -22,14 +37,63 @@ export default function TopHeaderSwitcher() {
     setMobileMenuOpen(false);
   }, [pathname]);
 
+  // Fetch branches when in club area
+  useEffect(() => {
+    if (!isClub) return;
+    fetch("/api/club/branches")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.success) setBranches(data.branches ?? []);
+      })
+      .catch(() => {});
+  }, [isClub]);
+
+  // Close branch dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (
+        branchDropdownRef.current &&
+        !branchDropdownRef.current.contains(e.target as Node)
+      ) {
+        setBranchDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   // Derivar valores desde el ThemeContext (ya tiene datos del servidor sin delay)
   const isCustom = theme.isCustomBranded;
   const primaryColor = theme.primaryColor ?? "#00F5D4";
   const logoUrl = theme.logoUrl ?? "/branding/all_crm_icon.png";
   const tenantName = theme.tenantName ?? "ALL-CRM";
+  const activeBranchName = theme.branchName;
+  const activeBranchId = theme.branchId;
 
   // Logo ALL-CRM: versión cuadrada centrada
   const isAllCrmLogo = !isCustom;
+
+  const hasMultipleBranches = branches.length > 1;
+
+  async function handleBranchSwitch(branchId: string) {
+    if (branchId === activeBranchId || switchingBranch) return;
+    setSwitchingBranch(true);
+    setBranchDropdownOpen(false);
+    try {
+      const res = await fetch("/api/club/branches/switch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ branchId }),
+      });
+      if (res.ok) {
+        window.location.reload();
+      }
+    } catch {
+      // silent
+    } finally {
+      setSwitchingBranch(false);
+    }
+  }
 
   return (
     <>
@@ -84,6 +148,80 @@ export default function TopHeaderSwitcher() {
               {isClub ? "Módulo Fidelización" : "Módulo Bot Difusión & Mensajería"}
             </span>
           </div>
+
+          {/* Branch Switcher — only shown in club area */}
+          {isClub && (activeBranchName || branches.length > 0) && (
+            <div className="relative ml-1 sm:ml-2 shrink-0" ref={branchDropdownRef}>
+              <button
+                onClick={() => hasMultipleBranches && setBranchDropdownOpen((o) => !o)}
+                disabled={switchingBranch}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition-all
+                  ${hasMultipleBranches
+                    ? "border-white/15 bg-white/5 hover:bg-white/10 hover:border-white/25 cursor-pointer text-zinc-200"
+                    : "border-white/10 bg-white/5 cursor-default text-zinc-300"
+                  }
+                `}
+                aria-label="Cambiar sucursal"
+              >
+                {switchingBranch ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-zinc-400" />
+                ) : (
+                  <MapPin className="w-3.5 h-3.5 shrink-0" style={{ color: primaryColor }} />
+                )}
+                <span className="hidden xs:inline sm:inline max-w-[80px] truncate">
+                  {activeBranchName ?? "Sucursal"}
+                </span>
+                {hasMultipleBranches && (
+                  <ChevronDown
+                    className={`w-3 h-3 text-zinc-400 transition-transform shrink-0 ${branchDropdownOpen ? "rotate-180" : ""}`}
+                  />
+                )}
+              </button>
+
+              {/* Dropdown */}
+              {branchDropdownOpen && hasMultipleBranches && (
+                <div className="absolute top-full left-0 mt-1.5 w-52 bg-zinc-900 border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden">
+                  <div className="px-3 py-2 border-b border-white/5">
+                    <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
+                      Cambiar sucursal
+                    </p>
+                  </div>
+                  <ul className="py-1">
+                    {branches.map((branch) => {
+                      const isActive = branch.id === activeBranchId;
+                      return (
+                        <li key={branch.id}>
+                          <button
+                            onClick={() => handleBranchSwitch(branch.id)}
+                            className={`w-full flex items-center gap-2 px-3 py-2.5 text-left transition-colors text-xs
+                              ${isActive
+                                ? "text-white bg-white/8"
+                                : "text-zinc-300 hover:text-white hover:bg-white/5"
+                              }
+                            `}
+                          >
+                            <MapPin
+                              className="w-3.5 h-3.5 shrink-0"
+                              style={{ color: isActive ? primaryColor : undefined }}
+                            />
+                            <span className="flex-1 font-medium truncate">{branch.name}</span>
+                            {branch.isMain && (
+                              <span className="text-[9px] font-bold text-zinc-500 uppercase">
+                                Principal
+                              </span>
+                            )}
+                            {isActive && (
+                              <Check className="w-3.5 h-3.5 shrink-0" style={{ color: primaryColor }} />
+                            )}
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Switcher Táctico */}

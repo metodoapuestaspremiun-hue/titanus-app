@@ -89,6 +89,7 @@ model Tenant {
   membershipPlans         MembershipPlan[]
   walletTransactions      WalletTransaction[]
   friendPasses            FriendPass[]
+  branches                Branch[]
 }
 
 model SuperAdmin {
@@ -102,6 +103,7 @@ model SuperAdmin {
 model Staff {
   id           String        @id @default(uuid())
   tenantId     String
+  branchId     String?       // Sucursal a la que pertenece
   name         String
   email        String?       @unique
   passwordHash String?
@@ -112,9 +114,11 @@ model Staff {
   updatedAt    DateTime      @updatedAt
 
   tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  branch       Branch?       @relation(fields: [branchId], references: [id], onDelete: SetNull)
   evaluations  Evaluation[]
 
   @@index([tenantId])
+  @@index([branchId])
 }
 
 model Customer {
@@ -172,6 +176,7 @@ model WalletTransaction {
 model Payment {
   id          String    @id @default(uuid())
   tenantId    String
+  branchId    String?   // Sucursal donde se generó el cobro
   customerId  String
   type        String    // MEMBERSHIP | RETAIL
   amount      Decimal   @db.Decimal(10, 2)
@@ -184,9 +189,11 @@ model Payment {
   updatedAt   DateTime  @updatedAt
 
   tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  branch      Branch?   @relation(fields: [branchId], references: [id], onDelete: SetNull)
   customer    Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
+  @@index([branchId])
   @@index([customerId])
 }
 
@@ -255,4 +262,25 @@ model FriendPass {
 
   @@index([tenantId, status])
   @@index([code])
+}
+
+model Branch {
+  id                    String        @id @default(uuid())
+  tenantId              String
+  name                  String        // ej: "Centro", "Sur", "UTPL"
+  code                  String        // ej: "CENTRO", "SUR", "UTPL"
+  address               String?       @db.VarChar(255)
+  phone                 String?       // WhatsApp de la sede si difiere
+  evolutionInstanceName String?       @db.VarChar(100)
+  isMain                Boolean       @default(false) // Sede Matriz
+  isActive              Boolean       @default(true)
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  tenant                Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  staff                 Staff[]
+  payments              Payment[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
 }

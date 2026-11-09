@@ -10,6 +10,7 @@ export interface TenantJWTPayload {
   tenantId: string
   tenantSlug: string
   role?: string
+  branchId?: string
 }
 
 export interface SuperAdminJWTPayload {
@@ -22,9 +23,12 @@ export interface SuperAdminJWTPayload {
 export async function signTenantToken(
   tenantId: string,
   tenantSlug: string,
-  role: string = 'OWNER'
+  role: string = 'OWNER',
+  branchId?: string
 ): Promise<string> {
-  return new SignJWT({ tenantId, tenantSlug, role })
+  const payload: Record<string, unknown> = { tenantId, tenantSlug, role }
+  if (branchId) payload.branchId = branchId
+  return new SignJWT(payload)
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime('7d')
@@ -43,6 +47,7 @@ export async function verifyTenantToken(token: string): Promise<TenantJWTPayload
     tenantId: payload.tenantId as string,
     tenantSlug: payload.tenantSlug as string,
     role: (payload.role as string) || 'OWNER',
+    branchId: (payload.branchId as string) || undefined,
   }
 }
 

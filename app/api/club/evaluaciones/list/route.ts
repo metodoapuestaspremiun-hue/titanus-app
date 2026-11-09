@@ -2,16 +2,31 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getTenantFromRequest } from '@/lib/getTenant'
 
-// GET /api/club/evaluaciones/list: Retorna las evaluaciones con detalle de opiniones y estrellas
+// GET /api/club/evaluaciones/list: Retorna las evaluaciones con detalle de opiniones y estrellas filtradas por sede
 export async function GET(req: Request) {
   try {
-    const { tenantId } = await getTenantFromRequest(req)
+    const { tenantId, branchId } = await getTenantFromRequest(req)
     const { searchParams } = new URL(req.url)
     const coachFilter = searchParams.get('coachId')
     const starsFilter = searchParams.get('stars')
 
-    // Filtros dinámicos respetando tenantId
-    const whereClause: any = { tenantId }
+    // Filtros dinámicos respetando tenantId y branchId
+    const staffWhere: any = { tenantId, isActive: true }
+    if (branchId) {
+      staffWhere.branchId = branchId
+    }
+
+    const coaches = await prisma.staff.findMany({
+      where: staffWhere,
+      include: { evaluations: true },
+    })
+
+    const allowedCoachIds = coaches.map((c) => c.id)
+
+    const whereClause: any = {
+      tenantId,
+      staffId: { in: allowedCoachIds },
+    }
     if (coachFilter && coachFilter !== 'ALL') {
       whereClause.staffId = coachFilter
     }
@@ -19,20 +34,16 @@ export async function GET(req: Request) {
       whereClause.stars = parseInt(starsFilter)
     }
 
-    const [evaluations, coaches] = await Promise.all([
-      prisma.evaluation.findMany({
-        where: whereClause,
-        include: {
-          customer: true,
-          staff: true,
-        },
-        orderBy: { createdAt: 'desc' },
-      }),
-      prisma.staff.findMany({
-        where: { tenantId, isActive: true },
-        include: { evaluations: true },
-      }),
-    ])
+    const evaluations = allowedCoachIds.length > 0
+      ? await prisma.evaluation.findMany({
+          where: whereClause,
+          include: {
+            customer: true,
+            staff: true,
+          },
+          orderBy: { createdAt: 'desc' },
+        })
+      : []
 
     // Calcular podio
     const ranked = coaches.map((coach) => {

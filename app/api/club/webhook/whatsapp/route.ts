@@ -29,7 +29,7 @@ export async function POST(req: Request) {
     ).trim()
     const lowerText = rawText.toLowerCase()
 
-    // 1. Extraer nombre de instancia de Evolution API para identificar el Tenant
+    // 1. Identificar Tenant por la instancia de Evolution API
     const instanceName =
       body.instance ||
       body.instanceName ||
@@ -57,7 +57,7 @@ export async function POST(req: Request) {
 
     const evoInstance = tenant.evolutionInstanceName || 'gym_bot'
 
-    // Obtener o registrar cliente de fidelización en este tenant
+    // 2. Obtener o registrar cliente en este tenant
     let customer = await prisma.customer.findFirst({
       where: { tenantId: tenant.id, phone },
       include: { wallets: { where: { tenantId: tenant.id } } },
@@ -79,12 +79,13 @@ export async function POST(req: Request) {
         where: { id: customer.id },
         data: { name: message.pushName },
       })
+      customer.name = message.pushName
     }
 
     const currentBalance = customer.wallets?.[0] ? Number(customer.wallets[0].balance) : 0
 
     // -------------------------------------------------------------
-    // CONSULTA AUTÓNOMA DE SALDO: /saldo, saldo, billetera, etc. (SIN APROBACIÓN)
+    // CONSULTA AUTÓNOMA DE SALDO: /saldo, saldo, billetera, etc.
     // -------------------------------------------------------------
     const isBalanceQuery = [
       '/saldo', 'saldo', 'mi saldo', 'cuanto tengo', 'cuanto tengo en mi wallet',
@@ -98,30 +99,74 @@ export async function POST(req: Request) {
     }
 
     // -------------------------------------------------------------
-    // SESIONES INTERACTIVAS EN CURSO
+    // INTERACTIVIDAD PASO A: SELECCIÓN DE SUCURSAL / SEDE (MULTI-SEDE)
     // -------------------------------------------------------------
+    const pendingBranchSelection = await prisma.qrToken.findFirst({
+      where: {
+        tenantId: tenant.id,
+        type: 'BRANCH_SELECTION',
+        token: { startsWith: `BRANCH_SEL_${phone}|` },
+        expiresAt: { gt: new Date() },
+      },
+    })
 
-    // A) Flujo 1: Calificación de Coaches - Selección de Coach
+    if (pendingBranchSelection && /^\d+$/.test(rawText)) {
+      const branches = await prisma.branch.findMany({
+        where: { tenantId: tenant.id, isActive: true },
+        orderBy: [{ isMain: 'desc' }, { createdAt: 'asc' }],
+      })
+
+      const branchIdx = parseInt(rawText) - 1
+      if (branchIdx >= 0 && branchIdx < branches.length) {
+        const chosenBranch = branches[branchIdx]
+        const originalAction = pendingBranchSelection.token.split('|ACTION:')[1] || 'MEM'
+
+        // Borrar sesión de selección de sede
+        await prisma.qrToken.deleteMany({
+          where: { tenantId: tenant.id, token: { startsWith: `BRANCH_SEL_${phone}|` } },
+        })
+
+        // Continuar hacia el flujo solicitado con la sede ya elegida
+        return await dispatchBranchFlow(tenant, customer, phone, evoInstance, chosenBranch, originalAction, currentBalance)
+      } else {
+        await sendWhatsAppMessage(
+          phone,
+          `⚠️ Número de sede inválido. Por favor responde con un número del 1 al ${branches.length}.`,
+          evoInstance
+        )
+        return NextResponse.json({ status: 'invalid_branch_index' })
+      }
+    }
+
+    // -------------------------------------------------------------
+    // INTERACTIVIDAD PASO B: CALIFICACIÓN DE COACHES (SELECCIÓN DE COACH)
+    // -------------------------------------------------------------
     const pendingCoachSelection = await prisma.qrToken.findFirst({
       where: {
         tenantId: tenant.id,
         type: 'EVAL_SELECT_COACH',
-        token: `EVAL_COACH_SEL_${phone}`,
+        token: { startsWith: `EVAL_COACH_SEL_${phone}` },
         expiresAt: { gt: new Date() },
       },
     })
 
     if (pendingCoachSelection && /^\d+$/.test(rawText)) {
-      const index = parseInt(rawText) - 1
+      const branchIdInToken = pendingCoachSelection.token.split('|BRANCH:')[1] || null
+      const whereCoaches: any = { tenantId: tenant.id, isActive: true }
+      if (branchIdInToken) {
+        whereCoaches.branchId = branchIdInToken
+      }
+
       const coaches = await prisma.staff.findMany({
-        where: { tenantId: tenant.id, isActive: true },
+        where: whereCoaches,
         orderBy: { name: 'asc' },
       })
 
+      const index = parseInt(rawText) - 1
       if (index >= 0 && index < coaches.length) {
         const chosenCoach = coaches[index]
 
-        // RESTRICCIÓN ANTISPAM: Máximo 1 evaluación al mismo coach cada 7 días por socio
+        // Restricción antispam: 1 calificación al mismo coach cada 7 días
         const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
         const recentEval = await prisma.evaluation.findFirst({
           where: {
@@ -153,21 +198,20 @@ export async function POST(req: Request) {
           data: {
             tenantId: tenant.id,
             type: 'EVAL_WAITING_STARS',
-            token: `EVAL_STARS_${phone}|COACH:${chosenCoach.id}`,
+            token: `EVAL_STARS_${phone}|COACH:${chosenCoach.id}|BRANCH:${branchIdInToken || ''}`,
             expiresAt: new Date(Date.now() + 10 * 60 * 1000),
           },
         })
 
-        await sendWhatsAppMessage(
-          phone,
-          `Has seleccionado a *${chosenCoach.name}*.\n\n⭐ ¿Cuántas estrellas le das a su entrenamiento?\nResponde con un número del *1 al 5* (Donde 5 es Excelente).`,
-          evoInstance
-        )
-        return NextResponse.json({ status: 'coach_selected', coach: chosenCoach.name })
+        const msg = `⭐ *CALIFICANDO A ${chosenCoach.name.toUpperCase()}*\n\n¿Cuántas estrellas le das a su entrenamiento de hoy?\n\nResponde únicamente con un número del *1 al 5*:\n\n⭐ 1 = Muy insatisfecho\n⭐⭐ 2 = Regular\n⭐⭐⭐ 3 = Bueno\n⭐⭐⭐⭐ 4 = Muy bueno\n⭐⭐⭐⭐⭐ 5 = ¡Excelente!`
+        await sendWhatsAppMessage(phone, msg, evoInstance)
+        return NextResponse.json({ status: 'waiting_stars', coach: chosenCoach.name })
       }
     }
 
-    // B) Flujo 1: Calificación de Coaches - Envío de Estrellas (100% AUTÓNOMO, SIN APROBACIÓN)
+    // -------------------------------------------------------------
+    // INTERACTIVIDAD PASO C: CALIFICACIÓN - ASIGNACIÓN DE ESTRELLAS
+    // -------------------------------------------------------------
     const pendingStars = await prisma.qrToken.findFirst({
       where: {
         tenantId: tenant.id,
@@ -179,10 +223,13 @@ export async function POST(req: Request) {
 
     if (pendingStars && /^[1-5]$/.test(rawText)) {
       const stars = parseInt(rawText)
-      const coachId = pendingStars.token.split('|COACH:')[1] || ''
+      const parts = pendingStars.token.split('|')
+      const coachPart = parts.find((p) => p.startsWith('COACH:'))
+      const coachId = coachPart ? coachPart.replace('COACH:', '') : ''
 
-      let createdEvalId: string | null = null
       if (coachId) {
+        let createdEvalId: string | null = null
+
         const createdEval = await prisma.evaluation.create({
           data: {
             tenantId: tenant.id,
@@ -192,42 +239,44 @@ export async function POST(req: Request) {
           },
         })
         createdEvalId = createdEval.id
-      }
 
-      await prisma.qrToken.deleteMany({
-        where: { tenantId: tenant.id, token: { startsWith: `EVAL_STARS_${phone}` } },
-      })
+        await prisma.qrToken.deleteMany({
+          where: { tenantId: tenant.id, token: { startsWith: `EVAL_STARS_${phone}` } },
+        })
 
-      if (stars === 5) {
-        const reviewUrl = tenant.googleReviewUrl || 'https://maps.google.com'
-        await sendWhatsAppMessage(
-          phone,
-          `⭐ *¡Muchísimas gracias por tus 5 Estrellas, ${customer.name}!*\n\nTu opinión es vital para nuestro equipo en ${tenant.name}. ¿Nos apoyarías dejando tu reseña en Google Maps con este enlace directo?\n👉 ${reviewUrl}\n\n¡A seguir entrenando con todo! 💪 *${tenant.name.toUpperCase()}*`,
-          evoInstance
-        )
-      } else {
-        // Para 1 a 4 estrellas: Guardar token esperando el comentario de auditoría
-        if (createdEvalId) {
-          await prisma.qrToken.create({
-            data: {
-              tenantId: tenant.id,
-              type: 'EVAL_WAITING_COMMENT',
-              token: `EVAL_COMMENT_${phone}|EVAL:${createdEvalId}`,
-              expiresAt: new Date(Date.now() + 15 * 60 * 1000), // 15 min para responder
-            },
-          })
+        if (stars === 5) {
+          const googleUrl = tenant.googleReviewUrl || 'https://maps.google.com'
+          await sendWhatsAppMessage(
+            phone,
+            `🎉 *¡Muchas gracias por tus 5 estrellas!*\n\nTu valoración nos impulsa a seguir dándolo todo.\n\n⭐ ¿Nos ayudarías compartiendo tu reseña en Google? Solo te tomará 10 segundos:\n👉 ${googleUrl}\n\n¡Te esperamos en tu próxima rutina! 💪🔥`,
+            evoInstance
+          )
+          return NextResponse.json({ status: 'evaluation_5_stars_completed' })
+        } else {
+          if (createdEvalId) {
+            await prisma.qrToken.create({
+              data: {
+                tenantId: tenant.id,
+                type: 'EVAL_WAITING_COMMENT',
+                token: `EVAL_COMMENT_${phone}|EVAL:${createdEvalId}`,
+                expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+              },
+            })
+          }
+
+          await sendWhatsAppMessage(
+            phone,
+            `🙏 *Gracias por tus ${stars} estrellas.*\n\nQueremos que tu experiencia sea siempre de 5 estrellas. ¿Qué podríamos mejorar o qué sucedió en tu entrenamiento?\n\n_Escribe tu comentario en el siguiente mensaje (o responde "No" si prefieres no comentar):_`,
+            evoInstance
+          )
+          return NextResponse.json({ status: 'waiting_feedback_comment' })
         }
-
-        await sendWhatsAppMessage(
-          phone,
-          `🙏 *Gracias por tu feedback sincero, ${customer.name}.*\n\nEn ${tenant.name} queremos mejorar siempre. ¿Tienes alguna sugerencia o comentario sobre tu entrenamiento? Responde a este mensaje y la administración lo revisará.`,
-          evoInstance
-        )
       }
-      return NextResponse.json({ status: 'evaluation_recorded', stars })
     }
 
-    // B.2) Flujo 1: Calificación de Coaches - Recepción del comentario/sugerencia (1 a 4 estrellas)
+    // -------------------------------------------------------------
+    // INTERACTIVIDAD PASO D: COMENTARIO DE FEEDBACK (1-4 ESTRELLAS)
+    // -------------------------------------------------------------
     const pendingComment = await prisma.qrToken.findFirst({
       where: {
         tenantId: tenant.id,
@@ -239,7 +288,6 @@ export async function POST(req: Request) {
 
     if (pendingComment && rawText.trim().length > 0) {
       const evalId = pendingComment.token.split('|EVAL:')[1] || ''
-
       if (evalId) {
         await prisma.evaluation.update({
           where: { id: evalId },
@@ -259,17 +307,20 @@ export async function POST(req: Request) {
       return NextResponse.json({ status: 'comment_recorded', evalId })
     }
 
-    // C) Flujo 2: Selección de Plan de Mensualidad -> Envía a Cola de Recepción (REQUIERE APROBACIÓN)
+    // -------------------------------------------------------------
+    // INTERACTIVIDAD PASO E: SELECCIÓN DE PLAN DE MENSUALIDAD (CON SUCURSAL)
+    // -------------------------------------------------------------
     const pendingPlanSelection = await prisma.qrToken.findFirst({
       where: {
         tenantId: tenant.id,
         type: 'PLAN_SELECTION',
-        token: `PLAN_SEL_${phone}`,
+        token: { startsWith: `PLAN_SEL_${phone}` },
         expiresAt: { gt: new Date() },
       },
     })
 
     if (pendingPlanSelection && /^\d+$/.test(rawText)) {
+      const branchIdInToken = pendingPlanSelection.token.split('|BRANCH:')[1] || null
       const index = parseInt(rawText) - 1
       const plans = await prisma.membershipPlan.findMany({
         where: { tenantId: tenant.id, isActive: true },
@@ -286,10 +337,11 @@ export async function POST(req: Request) {
           where: { tenantId: tenant.id, token: { startsWith: `PLAN_SEL_${phone}` } },
         })
 
-        // Crea pago con estado PENDING para que el recepcionista dé permiso
+        // Crea pago con branchId asignado para que aparezca exclusivamente en la caja de esa sede
         await prisma.payment.create({
           data: {
             tenantId: tenant.id,
+            branchId: branchIdInToken,
             customerId: customer.id,
             type: 'MEMBERSHIP',
             amount,
@@ -309,23 +361,24 @@ export async function POST(req: Request) {
       }
     }
 
-    // Extraer token si viene en formato "Hola, mi código es MEM-XXXX" o directamente "MEM-XXXX" o simplemente "MEM", "RET", "EVAL"
-    const match = rawText.match(/(MEM-[A-Z0-9]+|RET-[A-Z0-9]+|EVAL-[A-Z0-9]+|\bMEM\b|\bRET\b|\bEVAL\b)/i)
+    // -------------------------------------------------------------
+    // ENTRADA DE COMANDOS QR: MEM, RET, EVAL (CON SUFIJO O GENÉRICOS)
+    // -------------------------------------------------------------
+    const match = rawText.match(/(MEM-[A-Z0-9-]+|RET-[A-Z0-9-]+|EVAL-[A-Z0-9-]+|\bMEM\b|\bRET\b|\bEVAL\b)/i)
     const tokenExtracted = match ? match[1].toUpperCase() : rawText.trim().toUpperCase()
 
-    // Si no es un comando de código QR, ignorar
     const isQrCommand = tokenExtracted.startsWith('EVAL') || tokenExtracted.startsWith('MEM') || tokenExtracted.startsWith('RET')
     if (!isQrCommand) {
       return NextResponse.json({ status: 'not_club_command' })
     }
 
     // -------------------------------------------------------------
-    // CONSUMO ATÓMICO DEL TOKEN QR (SEGURIDAD ANTIFRAUDE)
+    // CONSUMO ATÓMICO DEL TOKEN QR (SEGURIDAD ANTIFRAUDE & ANTISPAM)
     // -------------------------------------------------------------
-    // Si es un comando directo permanente (MEM, RET, EVAL), NO requiere token efímero
-    const isPermanentCommand = tokenExtracted === 'MEM' || tokenExtracted === 'RET' || tokenExtracted === 'EVAL'
+    // Si viene un token generado (ej: MEM-SUR-7X9B o MEM-8F2K), se valida su existencia y tiempo de vida
+    const isPermanentBareCommand = tokenExtracted === 'MEM' || tokenExtracted === 'RET' || tokenExtracted === 'EVAL'
 
-    if (!isPermanentCommand) {
+    if (!isPermanentBareCommand) {
       const validQr = await prisma.qrToken.findFirst({
         where: {
           tenantId: tenant.id,
@@ -337,126 +390,199 @@ export async function POST(req: Request) {
       if (!validQr) {
         await sendWhatsAppMessage(
           phone,
-          `⚠️ *Código QR no válido o ya utilizado*\n\nEste código ya fue consumido o su tiempo de escaneo expiró. Por favor vuelve a escanear el cartel oficial en el gimnasio.`,
+          `⚠️ *Código QR no válido o ya utilizado*\n\nEste código ya fue consumido o su tiempo de escaneo expiró (3 minutos). Por favor vuelve a escanear el cartel oficial en la recepción del gimnasio.`,
           evoInstance
         )
         return NextResponse.json({ status: 'qr_expired_or_invalid' })
       }
 
-      // Quemar el token inmediatamente de la base de datos (Un solo uso)
+      // Quemar el token inmediatamente de la base de datos (Un solo uso garantizado)
       await prisma.qrToken.delete({ where: { id: validQr.id } })
     }
 
-    // -------------------------------------------------------------
-    // FLUJO 1: CALIFICAR COACH (QR: EVAL) -> 100% AUTÓNOMO (NO REQUIERE APROBACIÓN)
-    // -------------------------------------------------------------
-    if (tokenExtracted.startsWith('EVAL')) {
-      const coaches = await prisma.staff.findMany({
-        where: { tenantId: tenant.id, isActive: true },
-        orderBy: { name: 'asc' },
-      })
+    // Determinar la acción base: EVAL, MEM o RET
+    let actionType = 'MEM'
+    if (tokenExtracted.startsWith('EVAL')) actionType = 'EVAL'
+    else if (tokenExtracted.startsWith('RET')) actionType = 'RET'
 
-      if (coaches.length === 0) {
-        await sendWhatsAppMessage(
-          phone,
-          `❌ No hay entrenadores registrados aún en el sistema. Consulta en recepción.`,
-          evoInstance
-        )
-        return NextResponse.json({ status: 'no_coaches' })
+    // Obtener las sucursales del gimnasio
+    const branches = await prisma.branch.findMany({
+      where: { tenantId: tenant.id, isActive: true },
+      orderBy: [{ isMain: 'desc' }, { createdAt: 'asc' }],
+    })
+
+    // Detectar si el QR ya trae la sede en su código (ej: EVAL-SUR, MEM-CENTRO, RET-UTPL)
+    let explicitBranch: any = null
+    for (const b of branches) {
+      if (tokenExtracted.includes(`-${b.code}`) || tokenExtracted.endsWith(b.code)) {
+        explicitBranch = b
+        break
       }
-
-      let msg = `🏋️ *CALIFICA A TU ENTRENADOR - ${tenant.name.toUpperCase()}*\n\n`
-      msg += `Responde con el *número* del coach que deseas calificar:\n\n`
-      coaches.forEach((c, idx) => {
-        msg += `*${idx + 1}.* ${c.name}\n`
-      })
-      msg += `\n_Ejemplo: Responde *1* para el primer entrenador._`
-
-      await sendWhatsAppMessage(phone, msg, evoInstance)
-
-      await prisma.qrToken.deleteMany({
-        where: { tenantId: tenant.id, token: { startsWith: `EVAL_COACH_SEL_${phone}` } },
-      })
-      await prisma.qrToken.create({
-        data: {
-          tenantId: tenant.id,
-          type: 'EVAL_SELECT_COACH',
-          token: `EVAL_COACH_SEL_${phone}`,
-          expiresAt: new Date(Date.now() + 10 * 60 * 1000),
-        },
-      })
-
-      return NextResponse.json({ status: 'coaches_listed' })
     }
 
-    // -------------------------------------------------------------
-    // -------------------------------------------------------------
-    // FLUJO 2: PAGO DE MENSUALIDAD (QR: MEM) -> REQUIERE APROBACIÓN EN CAJA
-    // -------------------------------------------------------------
-    if (tokenExtracted.startsWith('MEM')) {
-      const plans = await prisma.membershipPlan.findMany({
-        where: { tenantId: tenant.id, isActive: true },
-        orderBy: { price: 'asc' },
-      })
-
-      let msg = `📋 *PLANES DE MENSUALIDAD - ${tenant.name.toUpperCase()}*\n\n`
-      msg += `Hola *${customer.name}*! Responde con el *número* del plan que deseas abonar:\n\n`
-
-      plans.forEach((p, idx) => {
-        const cashbackEst = ((Number(p.price) * Number(tenant.referralCommPct)) / 100).toFixed(2)
-        msg += `*${idx + 1}.* ${p.name} — *$${Number(p.price).toFixed(2)} USD*\n   └ 🎁 Ganas *$${cashbackEst} USD* de Cashback\n\n`
-      })
-      msg += `_Responde con el número de tu plan (ej: *1* o *2*)._`
-
-      await sendWhatsAppMessage(phone, msg, evoInstance)
-
-      await prisma.qrToken.deleteMany({
-        where: { tenantId: tenant.id, token: { startsWith: `PLAN_SEL_${phone}` } },
-      })
-      await prisma.qrToken.create({
-        data: {
-          tenantId: tenant.id,
-          type: 'PLAN_SELECTION',
-          token: `PLAN_SEL_${phone}`,
-          expiresAt: new Date(Date.now() + 10 * 60 * 1000),
-        },
-      })
-
-      return NextResponse.json({ status: 'plans_listed' })
+    // Si el QR ya indica la sede de forma explícita, va directo a esa sede
+    if (explicitBranch) {
+      return await dispatchBranchFlow(tenant, customer, phone, evoInstance, explicitBranch, actionType, currentBalance)
     }
 
-    // -------------------------------------------------------------
-    // FLUJO 3: TIENDA RETAIL / BARRA (QR: RET) -> REQUIERE APROBACIÓN EN CAJA
-    // -------------------------------------------------------------
-    if (tokenExtracted.startsWith('RET')) {
-      const cashbackPct = Number(tenant.storeReferralCommPct)
-
-      // Registra en caja con estado PENDING para que recepción ponga el monto y apruebe
-      await prisma.payment.create({
-        data: {
-          tenantId: tenant.id,
-          customerId: customer.id,
-          type: 'RETAIL',
-          amount: 0,
-          cashbackPct,
-          cashbackAmt: 0,
-          status: 'PENDING',
-          description: 'Consumo en Barra de Suplementos',
-        },
-      })
-
-      await sendWhatsAppMessage(
-        phone,
-        `🥤 *COMPRA EN BARRA REGISTRADA*\n\nHola *${customer.name}*!\n\nTu consumo fue enviado al monitor de recepción. El staff confirmará el monto de tus productos y una vez aprobado, se acreditará tu *${cashbackPct}% de Cashback* a tu Billetera Digital.\n\n💰 Saldo actual: *$${currentBalance.toFixed(2)} USD*`,
-        evoInstance
-      )
-
-      return NextResponse.json({ status: 'retail_queued' })
+    // Si el gimnasio solo tiene 1 sucursal, va directo a la única sede
+    if (branches.length <= 1) {
+      const singleBranch = branches[0] || null
+      return await dispatchBranchFlow(tenant, customer, phone, evoInstance, singleBranch, actionType, currentBalance)
     }
 
-    return NextResponse.json({ status: 'ok' })
+    // Si el gimnasio tiene 2 o más sucursales y el QR es genérico (ej. "MEM", "EVAL", "RET"),
+    // se le pregunta al cliente en qué sede se encuentra
+    let branchMenu = `📍 *¿EN QUÉ SEDE TE ENCUENTRAS HOY?*\n\n`
+    branchMenu += `Hola *${customer.name}*! Para atenderte en la recepción correcta, responde con el número de tu sede:\n\n`
+
+    branches.forEach((b, idx) => {
+      const crown = b.isMain ? ' 👑 (Matriz)' : ''
+      branchMenu += `*${idx + 1}.* Sede ${b.name}${crown}\n`
+    })
+
+    branchMenu += `\n_Responde solo con el número (ej: *1* o *2*)._`
+
+    await sendWhatsAppMessage(phone, branchMenu, evoInstance)
+
+    // Guardar sesión esperando que responda la sede
+    await prisma.qrToken.deleteMany({
+      where: { tenantId: tenant.id, token: { startsWith: `BRANCH_SEL_${phone}|` } },
+    })
+    await prisma.qrToken.create({
+      data: {
+        tenantId: tenant.id,
+        type: 'BRANCH_SELECTION',
+        token: `BRANCH_SEL_${phone}|ACTION:${actionType}`,
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+      },
+    })
+
+    return NextResponse.json({ status: 'branch_selection_prompted' })
   } catch (error: any) {
     console.error('Error en Webhook Club WhatsApp:', error)
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
+}
+
+// Función auxiliar para enrutar hacia el flujo de la sede escogida
+async function dispatchBranchFlow(
+  tenant: any,
+  customer: any,
+  phone: string,
+  evoInstance: string,
+  branch: any | null,
+  actionType: string,
+  currentBalance: number
+) {
+  const branchId = branch?.id || null
+  const branchName = branch?.name || 'Centro'
+
+  // FLUJO 1: CALIFICAR COACH (EVAL)
+  if (actionType === 'EVAL') {
+    const whereCoaches: any = { tenantId: tenant.id, isActive: true }
+    if (branchId) {
+      whereCoaches.branchId = branchId
+    }
+
+    const coaches = await prisma.staff.findMany({
+      where: whereCoaches,
+      orderBy: { name: 'asc' },
+    })
+
+    if (coaches.length === 0) {
+      await sendWhatsAppMessage(
+        phone,
+        `❌ No hay entrenadores asignados a la *Sede ${branchName}* en este momento. Consulta en recepción.`,
+        evoInstance
+      )
+      return NextResponse.json({ status: 'no_coaches_in_branch' })
+    }
+
+    let msg = `🏋️ *CALIFICA A TU ENTRENADOR - SEDE ${branchName.toUpperCase()}*\n\n`
+    msg += `Responde con el *número* del coach que deseas calificar:\n\n`
+    coaches.forEach((c, idx) => {
+      msg += `*${idx + 1}.* ${c.name}\n`
+    })
+    msg += `\n_Ejemplo: Responde *1* para el primer entrenador._`
+
+    await sendWhatsAppMessage(phone, msg, evoInstance)
+
+    await prisma.qrToken.deleteMany({
+      where: { tenantId: tenant.id, token: { startsWith: `EVAL_COACH_SEL_${phone}` } },
+    })
+    await prisma.qrToken.create({
+      data: {
+        tenantId: tenant.id,
+        type: 'EVAL_SELECT_COACH',
+        token: `EVAL_COACH_SEL_${phone}|BRANCH:${branchId || ''}`,
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+      },
+    })
+
+    return NextResponse.json({ status: 'coaches_listed', branch: branchName })
+  }
+
+  // FLUJO 2: PAGO DE MENSUALIDAD (MEM)
+  if (actionType === 'MEM') {
+    const plans = await prisma.membershipPlan.findMany({
+      where: { tenantId: tenant.id, isActive: true },
+      orderBy: { price: 'asc' },
+    })
+
+    let msg = `📋 *PLANES DE MENSUALIDAD - SEDE ${branchName.toUpperCase()}*\n\n`
+    msg += `Hola *${customer.name}*! Responde con el *número* del plan que deseas abonar en caja:\n\n`
+
+    plans.forEach((p, idx) => {
+      const cashbackEst = ((Number(p.price) * Number(tenant.referralCommPct)) / 100).toFixed(2)
+      msg += `*${idx + 1}.* ${p.name} — *$${Number(p.price).toFixed(2)} USD*\n   └ 🎁 Ganas *$${cashbackEst} USD* de Cashback\n\n`
+    })
+    msg += `_Responde con el número de tu plan (ej: *1* o *2*)._`
+
+    await sendWhatsAppMessage(phone, msg, evoInstance)
+
+    await prisma.qrToken.deleteMany({
+      where: { tenantId: tenant.id, token: { startsWith: `PLAN_SEL_${phone}` } },
+    })
+    await prisma.qrToken.create({
+      data: {
+        tenantId: tenant.id,
+        type: 'PLAN_SELECTION',
+        token: `PLAN_SEL_${phone}|BRANCH:${branchId || ''}`,
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+      },
+    })
+
+    return NextResponse.json({ status: 'plans_listed', branch: branchName })
+  }
+
+  // FLUJO 3: TIENDA RETAIL / BARRA (RET)
+  if (actionType === 'RET') {
+    const cashbackPct = Number(tenant.storeReferralCommPct)
+
+    // Registra pago en estado PENDING con el branchId de la sede
+    await prisma.payment.create({
+      data: {
+        tenantId: tenant.id,
+        branchId,
+        customerId: customer.id,
+        type: 'RETAIL',
+        amount: 0,
+        cashbackPct,
+        cashbackAmt: 0,
+        status: 'PENDING',
+        description: `Consumo en Barra de Suplementos · Sede ${branchName}`,
+      },
+    })
+
+    await sendWhatsAppMessage(
+      phone,
+      `🥤 *COMPRA EN BARRA - SEDE ${branchName.toUpperCase()}*\n\nHola *${customer.name}*!\n\nTu consumo fue enviado al monitor de recepción de la *Sede ${branchName}*. El staff confirmará el monto de tus productos y una vez aprobado, se acreditará tu *${cashbackPct}% de Cashback* a tu Billetera Digital.\n\n💰 Saldo actual: *$${currentBalance.toFixed(2)} USD*`,
+      evoInstance
+    )
+
+    return NextResponse.json({ status: 'retail_queued', branch: branchName })
+  }
+
+  return NextResponse.json({ status: 'ok' })
 }

@@ -21,8 +21,10 @@ import {
 } from 'lucide-react'
 import axios from 'axios'
 import { QRCodeSVG } from 'qrcode.react'
+import { useTheme } from '@/components/ThemeProvider'
 
 export default function ClubConfig() {
+  const theme = useTheme()
   const [membershipCashback, setMembershipCashback] = useState(10)
   const [retailCashback, setRetailCashback] = useState(5)
   const [reviewUrl, setReviewUrl] = useState('')
@@ -694,9 +696,14 @@ export default function ClubConfig() {
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
               <div className="flex items-center gap-2">
                 <Users className="w-5 h-5" style={{ color: 'var(--color-primary, #00F5D4)' }} />
-                <h2 className="text-lg font-bold text-white">Entrenadores del Gimnasio</h2>
+                <div>
+                  <h2 className="text-lg font-bold text-white">Entrenadores</h2>
+                  <span className="text-xs text-zinc-400 font-medium">
+                    Sede activa: <strong className="text-white">{theme.branchName || 'Sede Principal'}</strong>
+                  </span>
+                </div>
               </div>
-              <span className="text-xs text-zinc-500">{coaches.length} registrados</span>
+              <span className="text-xs text-zinc-500">{coaches.length} en esta sede</span>
             </div>
 
             <form onSubmit={handleAddCoach} className="space-y-2">

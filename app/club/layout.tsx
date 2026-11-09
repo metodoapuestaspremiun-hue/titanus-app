@@ -20,10 +20,14 @@ export default async function ClubLayout({
   let logoUrl: string | null = '/branding/logo_negative.png'
   let tenantName = 'ALL-CRM'
   let tenantSlug = 'default'
+  let branchId: string | undefined = undefined
+  let branchName: string | undefined = undefined
 
   if (gymSession) {
     try {
-      const { tenantId } = await verifyTenantToken(gymSession)
+      const payload = await verifyTenantToken(gymSession)
+      const { tenantId, branchId: tokenBranchId } = payload
+
       const tenant = await prisma.tenant.findUnique({
         where: { id: tenantId },
         select: {
@@ -34,6 +38,7 @@ export default async function ClubLayout({
           logoUrl: true,
         },
       })
+
       if (tenant) {
         tenantName = tenant.name
         tenantSlug = tenant.slug
@@ -49,12 +54,38 @@ export default async function ClubLayout({
           secondaryColor = tenant.secondaryColor || '#00E5FF'
         }
       }
+
+      // Resolve active branch
+      const resolvedBranchId = tokenBranchId ?? undefined
+      if (resolvedBranchId) {
+        const branch = await prisma.branch.findFirst({
+          where: { id: resolvedBranchId, tenantId, isActive: true },
+          select: { id: true, name: true },
+        })
+        if (branch) {
+          branchId = branch.id
+          branchName = branch.name
+        }
+      }
+
+      // Fallback to main branch if none resolved
+      if (!branchId) {
+        const mainBranch = await prisma.branch.findFirst({
+          where: { tenantId, isMain: true, isActive: true },
+          select: { id: true, name: true },
+        })
+        if (mainBranch) {
+          branchId = mainBranch.id
+          branchName = mainBranch.name
+        }
+      }
     } catch {}
   } else {
     // Fallback por compatibilidad a Titanus Gym (si se ingresa por sesión legacy)
     const titanus = await prisma.tenant.findUnique({
       where: { slug: 'titanus-gym' },
       select: {
+        id: true,
         name: true,
         slug: true,
         primaryColor: true,
@@ -68,6 +99,16 @@ export default async function ClubLayout({
       logoUrl = titanus.logoUrl || '/Logo.webp'
       primaryColor = titanus.primaryColor || '#ffe202'
       secondaryColor = titanus.secondaryColor || '#000000'
+
+      // Resolve main branch for legacy session
+      const mainBranch = await prisma.branch.findFirst({
+        where: { tenantId: titanus.id, isMain: true, isActive: true },
+        select: { id: true, name: true },
+      })
+      if (mainBranch) {
+        branchId = mainBranch.id
+        branchName = mainBranch.name
+      }
     }
   }
 
@@ -78,6 +119,8 @@ export default async function ClubLayout({
       logoUrl={logoUrl}
       tenantName={tenantName}
       tenantSlug={tenantSlug}
+      branchId={branchId}
+      branchName={branchName}
     >
       <div className="min-h-screen bg-[var(--bg-app,#03080F)] text-white flex flex-col transition-colors duration-300">
         <TopHeaderSwitcher />

@@ -24,6 +24,17 @@ export async function GET(
     const tenant = await prisma.tenant.findUnique({
       where: { id },
       include: {
+        branches: {
+          orderBy: [{ isMain: 'desc' }, { createdAt: 'asc' }],
+          include: {
+            _count: {
+              select: {
+                staff: true,
+                payments: true,
+              },
+            },
+          },
+        },
         staff: {
           select: { id: true, name: true, role: true, isActive: true },
         },

@@ -345,32 +345,24 @@ export default function ReceptionDashboard() {
     try {
       setGeneratingQr(true)
       
-      // Obtener la configuración fresca del tenant
-      let phone = tenantConfig?.whatsappPhone
-      if (!phone) {
-        try {
-          const cfgRes = await axios.get('/api/club/config')
-          if (cfgRes.data) {
-            phone = cfgRes.data.whatsappPhone
-            setTenantConfig(cfgRes.data)
-          }
-        } catch {}
-      }
-      
-      const targetPhone = phone || '593967491847'
-      const prefix = type === 'MEMBERSHIP' ? 'MEM' : type === 'RETAIL' ? 'RET' : 'EVAL'
-      
-      // ENLACE 100% DIRECTO A WHATSAPP:
-      // Sin intermediarios, sin pasar por /qr/..., directo a wa.me del WhatsApp conectado
-      const directWhatsAppUrl = `https://wa.me/${targetPhone}?text=${encodeURIComponent(`Hola, mi código es ${prefix}`)}`
+      const slug = tenantConfig?.slug || theme?.tenantSlug || 'titanus-gym'
+      const typeRoute = type === 'MEMBERSHIP' ? 'm' : type === 'RETAIL' ? 't' : 'c'
+      const branchCode = theme?.branchName ? `/${encodeURIComponent(theme.branchName.toLowerCase())}` : ''
+
+      // URL Inteligente Permanente:
+      // El cartel físico siempre apunta a /qr/[slug]/[tipo]/[sede]
+      // Cuando cualquier cliente lo escanea con su cámara, el servidor genera un token dinámico efímero en 0.1s
+      // y lo redirige automáticamente a WhatsApp con el código único de un solo uso.
+      const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
+      const permanentQrUrl = `${baseUrl}/qr/${slug}/${typeRoute}${branchCode}`
 
       setQrModal({
         open: true,
         type,
         title,
-        token: prefix,
-        qrUrl: directWhatsAppUrl,
-        waUrl: directWhatsAppUrl,
+        token: `${type === 'MEMBERSHIP' ? 'MEM' : type === 'RETAIL' ? 'RET' : 'EVAL'}${theme?.branchName ? `-${theme.branchName.toUpperCase()}` : ''}`,
+        qrUrl: permanentQrUrl,
+        waUrl: permanentQrUrl,
       })
     } catch (e: any) {
       alert('Error mostrando código QR: ' + (e.response?.data?.error || e.message))
@@ -624,9 +616,10 @@ export default function ReceptionDashboard() {
                   <div className="flex items-center gap-2 flex-wrap">
                     <h3 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
                       {tenantConfig?.name || theme?.tenantName || 'ALL-CRM'}
+                      {theme?.branchName ? ` · Sede ${theme.branchName}` : ''}
                     </h3>
                     <span className="text-xs text-zinc-400 font-mono">
-                      (Monedero & Cashback Global)
+                      {theme?.branchName ? `(Monedero & Cashback Sede ${theme.branchName})` : '(Monedero & Cashback Global)'}
                     </span>
                   </div>
                   <div className="mt-2 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border"

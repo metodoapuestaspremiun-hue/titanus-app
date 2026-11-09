@@ -12,6 +12,7 @@ import {
   Sparkles,
   MessageSquare,
   AlertCircle,
+  MapPin,
 } from 'lucide-react'
 
 interface TenantItem {
@@ -27,6 +28,7 @@ interface TenantItem {
   logoUrl?: string | null
   evolutionInstanceName: string | null
   createdAt: string
+  branches?: Array<{ id: string; name: string; code: string; isMain: boolean }>
   _count: {
     customers: number
     staff: number
@@ -245,6 +247,23 @@ export default function SuperAdminTenantsPage() {
                           <span className="text-[11px] text-zinc-500 block">
                             {t.ownerEmail || 'Sin email'}
                           </span>
+                          {t.branches && t.branches.length > 0 && (
+                            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                              {t.branches.map((b) => (
+                                <span
+                                  key={b.id}
+                                  className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold ${
+                                    b.isMain
+                                      ? 'bg-[#00F5D4]/15 text-[#00F5D4] border border-[#00F5D4]/30'
+                                      : 'bg-white/5 text-zinc-400 border border-white/10'
+                                  }`}
+                                >
+                                  <MapPin className="w-2.5 h-2.5" />
+                                  {b.name}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </td>

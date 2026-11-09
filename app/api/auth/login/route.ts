@@ -30,11 +30,25 @@ export async function POST(request: Request) {
           password === 'Contraseña123.'
 
         if (isValid) {
-          const token = await signTenantToken(titanusTenant.id, titanusTenant.slug, 'OWNER')
+          // Buscar sucursales para que el cliente pueda elegir sede al loguearse
+          const branches = await prisma.branch.findMany({
+            where: { tenantId: titanusTenant.id, isActive: true },
+            orderBy: [{ isMain: 'desc' }, { createdAt: 'asc' }],
+            select: { id: true, name: true, code: true, isMain: true, address: true },
+          })
+
+          const mainBranch = branches.find((b) => b.isMain) || branches[0]
+          const token = await signTenantToken(
+            titanusTenant.id,
+            titanusTenant.slug,
+            'OWNER',
+            mainBranch?.id
+          )
           const response = NextResponse.json({
             success: true,
             tenantSlug: titanusTenant.slug,
             token,
+            branches,
           })
 
           response.cookies.set(TENANT_COOKIE_NAME, token, {
@@ -89,11 +103,20 @@ export async function POST(request: Request) {
       )
     }
 
-    const token = await signTenantToken(tenant.id, tenant.slug, 'OWNER')
+    // Buscar sucursales activas
+    const branches = await prisma.branch.findMany({
+      where: { tenantId: tenant.id, isActive: true },
+      orderBy: [{ isMain: 'desc' }, { createdAt: 'asc' }],
+      select: { id: true, name: true, code: true, isMain: true, address: true },
+    })
+
+    const mainBranch = branches.find((b) => b.isMain) || branches[0]
+    const token = await signTenantToken(tenant.id, tenant.slug, 'OWNER', mainBranch?.id)
     const response = NextResponse.json({
       success: true,
       tenantSlug: tenant.slug,
       token,
+      branches,
     })
 
     response.cookies.set(TENANT_COOKIE_NAME, token, {

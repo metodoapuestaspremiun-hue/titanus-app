@@ -17,6 +17,9 @@ import {
   Save,
   Upload,
   AlertCircle,
+  Plus,
+  X,
+  Crown,
 } from 'lucide-react'
 
 function slugify(text: string): string {
@@ -53,6 +56,9 @@ export default function NewTenantPage() {
   const [logoFile, setLogoFile] = useState<File | null>(null)
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
   const [uploadingLogo, setUploadingLogo] = useState(false)
+
+  // Sucursales iniciales
+  const [branches, setBranches] = useState<string[]>(['Centro'])
 
   const handleNameChange = (val: string) => {
     setName(val)
@@ -97,6 +103,7 @@ export default function NewTenantPage() {
           googleReviewUrl: googleReviewUrl || null,
           referralCommPct,
           storeReferralCommPct,
+          branches: branches.filter((b) => b.trim() !== ''),
         }),
       })
 
@@ -432,6 +439,67 @@ export default function NewTenantPage() {
               />
             </div>
           </div>
+        </div>
+
+        {/* Section: Sucursales Iniciales */}
+        <div className="bg-[var(--bg-card,#05101C)] border border-[var(--border-card,rgba(0,245,212,0.15))] p-6 rounded-2xl space-y-5">
+          <h2 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2 font-display">
+            <Building2 className="w-4 h-4 text-[#00F5D4]" />
+            <span>5. Sucursales Iniciales</span>
+          </h2>
+
+          <p className="text-xs text-zinc-400">
+            Define las sedes del gimnasio. La primera siempre será la{' '}
+            <strong className="text-zinc-200">Sede Principal</strong> (Matriz).
+          </p>
+
+          <div className="space-y-2">
+            {branches.map((branchName, idx) => (
+              <div key={idx} className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  {idx === 0 && (
+                    <Crown className="absolute left-3.5 top-1/2 -translate-y-1/2 text-yellow-400 w-4 h-4 pointer-events-none" />
+                  )}
+                  <input
+                    type="text"
+                    value={branchName}
+                    onChange={(e) => {
+                      const updated = [...branches]
+                      updated[idx] = e.target.value
+                      setBranches(updated)
+                    }}
+                    placeholder={idx === 0 ? 'Sede Principal (ej. Centro)' : `Sucursal ${idx + 1}`}
+                    className={`w-full bg-zinc-900 border rounded-xl pr-4 py-2.5 text-white text-sm focus:outline-none focus:border-[#00F5D4] ${
+                      idx === 0 ? 'pl-10 border-yellow-400/40' : 'pl-4 border-zinc-800'
+                    }`}
+                  />
+                </div>
+                {idx === 0 ? (
+                  <span className="text-[10px] font-bold text-yellow-400 uppercase tracking-wider px-2 shrink-0">
+                    Matriz
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setBranches(branches.filter((_, i) => i !== idx))}
+                    className="p-2 text-zinc-500 hover:text-red-400 rounded-lg hover:bg-red-500/10 transition-colors shrink-0"
+                    aria-label="Eliminar sucursal"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setBranches([...branches, ''])}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-dashed border-[#00F5D4]/30 text-[#00F5D4] text-xs font-bold hover:bg-[#00F5D4]/5 transition-colors"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Agregar Sucursal
+          </button>
         </div>
 
         {/* Submit Button */}

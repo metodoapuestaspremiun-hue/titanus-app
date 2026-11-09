@@ -3,9 +3,11 @@ import { prisma } from '@/lib/prisma'
 import crypto from 'crypto'
 import { verifyTenantToken, TENANT_COOKIE_NAME } from '@/lib/auth'
 
-// Esta ruta procesa el escaneo del cartel físico tanto para:
-// 1. Rutas con slug directo: /qr/titanus-gym/m | /qr/sparta/t | /qr/sparta/c
-// 2. Rutas legacy: /qr/m | /qr/t | /qr/c (con opcional ?slug=...)
+// Esta ruta procesa el escaneo del cartel físico permanente:
+// Formatos soportados:
+// 1. /qr/[slug]/[type]/[branchCode]  (ej: /qr/titanus-gym/m/sur -> Genera token de Sede Sur)
+// 2. /qr/[slug]/[type]               (ej: /qr/titanus-gym/m -> Genera token multi-sede)
+// 3. /qr/[type]                      (ej: /qr/m con fallback a Titanus Gym)
 
 export async function GET(
   req: Request,
@@ -17,42 +19,45 @@ export async function GET(
 
     let targetSlug: string | null = null
     let rawType = 'm'
+    let branchCodeParam: string | null = null
 
-    if (segments.length >= 2) {
+    if (segments.length >= 3) {
+      // Formato: /qr/[slug]/[type]/[branchCode]
+      targetSlug = segments[0]?.toLowerCase()
+      rawType = segments[1]?.toLowerCase()
+      branchCodeParam = segments[2]?.toUpperCase()
+    } else if (segments.length === 2) {
       // Formato: /qr/[slug]/[type]
       targetSlug = segments[0]?.toLowerCase()
       rawType = segments[1]?.toLowerCase()
     } else if (segments.length === 1) {
-      // Formato: /qr/[type] (puede venir con ?slug= en la URL)
+      // Formato: /qr/[type]
       rawType = segments[0]?.toLowerCase()
     }
 
-    const typeUpper = rawType.toLowerCase()
+    const typeLower = rawType.toLowerCase()
 
     let qrType = 'MEMBERSHIP'
     let prefix = 'MEM'
 
-    if (typeUpper === 't' || typeUpper === 'tienda' || typeUpper === 'retail') {
+    if (typeLower === 't' || typeLower === 'tienda' || typeLower === 'retail') {
       qrType = 'RETAIL'
       prefix = 'RET'
-    } else if (typeUpper === 'c' || typeUpper === 'coach' || typeUpper === 'eval') {
+    } else if (typeLower === 'c' || typeLower === 'coach' || typeLower === 'eval') {
       qrType = 'EVALUATION'
       prefix = 'EVAL'
-    } else if (typeUpper === 'm' || typeUpper === 'mensualidad') {
+    } else if (typeLower === 'm' || typeLower === 'mensualidad') {
       qrType = 'MEMBERSHIP'
       prefix = 'MEM'
     }
 
     const { searchParams } = new URL(req.url)
     const slugQuery = searchParams.get('slug')?.toLowerCase().trim() || targetSlug?.trim()
-    const existingToken = searchParams.get('token')
+    const queryBranch = searchParams.get('branch')?.toUpperCase().trim() || branchCodeParam
 
     let tenant = null
     if (slugQuery) {
-      // 1. Buscar por slug exacto
       tenant = await prisma.tenant.findUnique({ where: { slug: slugQuery } })
-
-      // 2. Si no coincide, buscar por nombre de instancia Evolution o por nombre insensible a mayúsculas
       if (!tenant) {
         tenant = await prisma.tenant.findFirst({
           where: {
@@ -66,7 +71,7 @@ export async function GET(
       }
     }
 
-    // 3. Si no vino slug, intentar resolver por cookie de sesión
+    // Resolver por cookie si no vino en URL
     if (!tenant) {
       const cookieHeader = req.headers.get('cookie')
       if (cookieHeader) {
@@ -75,87 +80,62 @@ export async function GET(
           .map((c) => c.trim())
           .find((c) => c.startsWith(`${TENANT_COOKIE_NAME}=`))
         if (match) {
-          const token = decodeURIComponent(match.substring(TENANT_COOKIE_NAME.length + 1))
+          const tokenCookie = decodeURIComponent(match.substring(TENANT_COOKIE_NAME.length + 1))
           try {
-            const { tenantId } = await verifyTenantToken(token)
+            const { tenantId } = await verifyTenantToken(tokenCookie)
             tenant = await prisma.tenant.findUnique({ where: { id: tenantId } })
           } catch {}
         }
       }
     }
 
-    // 4. Si aún no está en BD pero vino un slug, consultar directamente a Evolution API
-    let liveEvoPhone: string | null = null
-    const evoUrl = process.env.EVOLUTION_API_URL || 'http://178.238.238.158:8080'
-    const evoKey = process.env.EVOLUTION_API_KEY || '42a447c1-3d74-4b52-9571-042c174f7621'
-
-    if (!tenant && slugQuery) {
-      try {
-        const evoRes = await fetch(`${evoUrl}/instance/fetchInstances`, {
-          headers: { apikey: evoKey },
-          cache: 'no-store',
-        })
-        const instances = await evoRes.json()
-        const list = Array.isArray(instances) ? instances : instances?.value || []
-        const matched = list.find(
-          (i: any) =>
-            i.name?.toLowerCase() === slugQuery ||
-            i.name?.toLowerCase() === `gym_${slugQuery.replace(/-/g, '_')}`
-        )
-        if (matched && matched.ownerJid) {
-          liveEvoPhone = matched.ownerJid.split('@')[0].replace(/[^0-9]/g, '')
-        }
-      } catch (e) {
-        console.error('Error buscando instancia en fallback:', e)
-      }
-    }
-
-    // 5. Fallback a Titanus Gym si no se pudo determinar
-    if (!tenant && !liveEvoPhone) {
+    // Fallback a Titanus Gym
+    if (!tenant) {
       tenant = await prisma.tenant.findUnique({ where: { slug: 'titanus-gym' } })
     }
 
-    // Si aún así no hay tenant ni número, usar el teléfono default en lugar de tirar error 404
-    const resolvedPhone = liveEvoPhone || tenant?.whatsappPhone || '593986962872'
+    if (!tenant) {
+      return new Response('Gimnasio no encontrado', { status: 404 })
+    }
 
-    let token = existingToken
-    if (!token) {
-      // 1. Generar token único criptográfico efímero
-      const randomSuffix = crypto.randomBytes(3).toString('hex').toUpperCase()
-      token = `${prefix}-${randomSuffix}`
-
-      // 2. Guardar en la tabla QrToken con TTL de 2 minutos
-      const expiresAt = new Date(Date.now() + 120 * 1000)
-
-      if (tenant) {
-        await prisma.qrToken.create({
-          data: {
-            tenantId: tenant.id,
-            type: qrType,
-            token: token,
-            expiresAt: expiresAt,
-          },
-        })
+    // 1. Resolver sucursal física asociada al cartel si vino especificada
+    let branchCodeTag = ''
+    if (queryBranch) {
+      const branch = await prisma.branch.findFirst({
+        where: {
+          tenantId: tenant.id,
+          OR: [
+            { code: queryBranch },
+            { name: { equals: queryBranch } },
+          ],
+          isActive: true,
+        },
+      })
+      if (branch) {
+        branchCodeTag = `-${branch.code}`
       }
     }
 
-    // 3. Obtener dinámicamente el número REAL conectado a la instancia en Evolution API
-    let whatsappPhone: string | null = null
+    // 2. Generar token criptográfico efímero de un solo uso (TTL: 3 minutos)
+    const randomSuffix = crypto.randomBytes(3).toString('hex').toUpperCase()
+    const dynamicToken = `${prefix}${branchCodeTag}-${randomSuffix}` // ej: MEM-SUR-7A9B o MEM-8F3K
+    const expiresAt = new Date(Date.now() + 180 * 1000)
 
+    await prisma.qrToken.create({
+      data: {
+        tenantId: tenant.id,
+        type: qrType,
+        token: dynamicToken,
+        expiresAt: expiresAt,
+      },
+    })
+
+    // 3. Obtener el número de WhatsApp oficial conectado en Evolution API
+    let whatsappPhone = tenant.whatsappPhone || '593986962872'
     try {
-      const evoUrl =
-        tenant?.evolutionApiUrl ||
-        process.env.EVOLUTION_API_URL ||
-        'http://178.238.238.158:8080'
-      const evoKey =
-        tenant?.evolutionApiKey ||
-        process.env.EVOLUTION_API_KEY ||
-        '42a447c1-3d74-4b52-9571-042c174f7621'
-      const evoInst =
-        tenant?.evolutionInstanceName ||
-        slugQuery ||
-        process.env.EVOLUTION_INSTANCE_NAME ||
-        'gym_bot'
+      const evoUrl = tenant.evolutionApiUrl || process.env.EVOLUTION_API_URL || 'http://178.238.238.158:8080'
+      const evoKey = tenant.evolutionApiKey || process.env.EVOLUTION_API_KEY || '42a447c1-3d74-4b52-9571-042c174f7621'
+      const evoInst = tenant.evolutionInstanceName || 'gym_bot'
 
       const evoRes = await fetch(`${evoUrl}/instance/fetchInstances`, {
         headers: { apikey: evoKey },
@@ -169,25 +149,16 @@ export async function GET(
         whatsappPhone = target.ownerJid.split('@')[0].replace(/[^0-9]/g, '')
       }
     } catch (err) {
-      console.error('Error obteniendo número de la instancia Evolution:', err)
+      console.warn('Fallback al número registrado en base de datos:', err)
     }
 
-    // Fallback al teléfono de base de datos o default
-    if (!whatsappPhone) {
-      whatsappPhone =
-        resolvedPhone ||
-        (tenant?.whatsappPhone && tenant.whatsappPhone.length > 8
-          ? tenant.whatsappPhone
-          : '593986962872')
-    }
-
-    const messageText = `Hola, mi código es ${token}`
+    // 4. Redirección instantánea (0.1 seg) hacia WhatsApp con el token efímero preescrito
+    const messageText = `Hola, mi código es ${dynamicToken}`
     const waUrl = `https://wa.me/${whatsappPhone}?text=${encodeURIComponent(messageText)}`
 
     return NextResponse.redirect(waUrl, 302)
   } catch (error) {
-    console.error('Error en redirección de QR dinámico:', error)
+    console.error('Error en redirección de QR dinámico permanente:', error)
     return new Response('Error procesando el escaneo', { status: 500 })
   }
 }
-

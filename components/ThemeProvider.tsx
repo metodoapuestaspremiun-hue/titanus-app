@@ -9,6 +9,8 @@ interface ThemeContextType {
   tenantName: string
   tenantSlug: string
   isCustomBranded: boolean
+  branchId?: string
+  branchName?: string
 }
 
 const ThemeContext = createContext<ThemeContextType>({
@@ -18,6 +20,8 @@ const ThemeContext = createContext<ThemeContextType>({
   tenantSlug: 'default',
   logoUrl: '/branding/logo_negative.png',
   isCustomBranded: false,
+  branchId: undefined,
+  branchName: undefined,
 })
 
 export const useTheme = () => useContext(ThemeContext)
@@ -29,6 +33,8 @@ export function ThemeProvider({
   logoUrl = '/branding/logo_negative.png',
   tenantName = 'ALL-CRM',
   tenantSlug = 'default',
+  branchId,
+  branchName,
 }: {
   children: React.ReactNode
   primaryColor?: string
@@ -36,6 +42,8 @@ export function ThemeProvider({
   logoUrl?: string | null
   tenantName?: string
   tenantSlug?: string
+  branchId?: string
+  branchName?: string
 }) {
   // isCustomBranded: true si tiene logo externo (URL http o no es el logo ALL-CRM por defecto)
   const isCustomBranded = Boolean(logoUrl && !logoUrl.startsWith('/branding/'))
@@ -67,6 +75,8 @@ export function ThemeProvider({
         tenantName,
         tenantSlug,
         isCustomBranded,
+        branchId,
+        branchName,
       }}
     >
       <style

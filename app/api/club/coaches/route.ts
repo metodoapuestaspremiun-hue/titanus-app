@@ -2,14 +2,23 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getTenantFromRequest } from '@/lib/getTenant'
 
-// GET /api/club/coaches: Lista todos los entrenadores del tenant actual
+// GET /api/club/coaches: Lista todos los entrenadores de la sucursal activa
 export async function GET(req: Request) {
   try {
-    const { tenantId } = await getTenantFromRequest(req)
+    const { tenantId, branchId } = await getTenantFromRequest(req)
+
+    const whereClause: any = { tenantId }
+    if (branchId) {
+      // Filtrar estrictamente por la sucursal activa (sin mezclar con otras sedes)
+      whereClause.branchId = branchId
+    }
 
     const coaches = await prisma.staff.findMany({
-      where: { tenantId },
+      where: whereClause,
       orderBy: { createdAt: 'desc' },
+      include: {
+        branch: { select: { id: true, name: true, code: true } },
+      },
     })
 
     return NextResponse.json({ coaches })
@@ -19,23 +28,29 @@ export async function GET(req: Request) {
   }
 }
 
-// POST /api/club/coaches: Crear nuevo entrenador en el tenant actual con soporte de avatarUrl
+// POST /api/club/coaches: Crear nuevo entrenador asociado a la sucursal activa
 export async function POST(req: Request) {
   try {
-    const { tenantId } = await getTenantFromRequest(req)
-    const { name, role, avatarUrl } = await req.json()
+    const { tenantId, branchId } = await getTenantFromRequest(req)
+    const { name, role, avatarUrl, targetBranchId } = await req.json()
 
     if (!name?.trim()) {
       return NextResponse.json({ error: 'El nombre es obligatorio' }, { status: 400 })
     }
 
+    const finalBranchId = targetBranchId || branchId || null
+
     const newCoach = await prisma.staff.create({
       data: {
         tenantId,
+        branchId: finalBranchId,
         name: name.trim(),
         role: role || 'TRAINER',
         avatarUrl: avatarUrl?.trim() || null,
         isActive: true,
+      },
+      include: {
+        branch: { select: { id: true, name: true, code: true } },
       },
     })
 

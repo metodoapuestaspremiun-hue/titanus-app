@@ -2,14 +2,20 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getTenantFromRequest } from '@/lib/getTenant'
 
-// GET /api/club/evaluaciones: Obtiene el ranking real de entrenadores y estadísticas del tenant
+// GET /api/club/evaluaciones: Obtiene el ranking real de entrenadores filtrado estrictamente por la sucursal activa
 export async function GET(req: Request) {
   try {
-    const { tenantId } = await getTenantFromRequest(req)
+    const { tenantId, branchId } = await getTenantFromRequest(req)
+
+    const whereClause: any = { tenantId, isActive: true }
+    if (branchId) {
+      whereClause.branchId = branchId
+    }
 
     const coaches = await prisma.staff.findMany({
-      where: { tenantId, isActive: true },
+      where: whereClause,
       include: {
+        branch: { select: { id: true, name: true, code: true } },
         evaluations: true,
       },
     })
@@ -25,6 +31,7 @@ export async function GET(req: Request) {
         id: coach.id,
         name: coach.name,
         role: coach.role,
+        branch: coach.branch?.name || 'Sede Principal',
         stars: Number(avgStars.toFixed(2)),
         totalReviews,
       }

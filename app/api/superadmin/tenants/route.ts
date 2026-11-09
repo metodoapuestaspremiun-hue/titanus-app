@@ -12,6 +12,15 @@ function slugify(text: string): string {
     .replace(/^-+|-+$/g, '')
 }
 
+function branchCodeFromName(name: string): string {
+  return name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '')
+    .slice(0, 20)
+}
+
 // GET /api/superadmin/tenants: Retorna estadísticas SaaS y lista de todos los tenants
 export async function GET(req: Request) {
   try {
@@ -31,6 +40,10 @@ export async function GET(req: Request) {
       prisma.tenant.findMany({
         orderBy: { createdAt: 'desc' },
         include: {
+          branches: {
+            orderBy: [{ isMain: 'desc' }, { createdAt: 'asc' }],
+            select: { id: true, name: true, code: true, isMain: true },
+          },
           _count: {
             select: {
               customers: true,
@@ -85,6 +98,7 @@ export async function POST(req: Request) {
       googleReviewUrl,
       referralCommPct = 10,
       storeReferralCommPct = 5,
+      branches,
     } = body
 
     if (!name?.trim()) {
@@ -132,27 +146,57 @@ export async function POST(req: Request) {
     // Instancia de Evolution API: si no se especifica nombre, se autogenera con el slug del gimnasio
     const cleanedInstance = evolutionInstanceName?.trim() || `gym_${finalSlug.replace(/[^a-zA-Z0-9_]/g, '_')}`
 
-    // Crear Tenant en base de datos
-    const createdTenant = await prisma.tenant.create({
-      data: {
-        name: name.trim(),
-        slug: finalSlug,
-        ownerEmail: ownerEmail?.trim().toLowerCase() || null,
-        ownerPasswordHash,
-        plan,
-        moduleFidelizacion: Boolean(moduleFidelizacion),
-        moduleMensajeria: Boolean(moduleMensajeria),
-        evolutionInstanceName: cleanedInstance,
-        evolutionApiUrl: evolutionApiUrl?.trim() || null,
-        evolutionApiKey: evolutionApiKey?.trim() || null,
-        primaryColor: primaryColor?.trim() || '#00F5D4',
-        secondaryColor: secondaryColor?.trim() || '#00E5FF',
-        logoUrl: logoUrl?.trim() || null,
-        whatsappPhone: whatsappPhone?.trim() || null,
-        googleReviewUrl: googleReviewUrl?.trim() || null,
-        referralCommPct: Number(referralCommPct) || 10,
-        storeReferralCommPct: Number(storeReferralCommPct) || 5,
-      },
+    // Crear Tenant y branches en una transacción atómica
+    const branchNames: string[] = Array.isArray(branches) && branches.length > 0
+      ? (branches as string[]).filter((b) => typeof b === 'string' && b.trim() !== '')
+      : ['Centro']
+
+    const [createdTenant] = await prisma.$transaction(async (tx) => {
+      const tenant = await tx.tenant.create({
+        data: {
+          name: name.trim(),
+          slug: finalSlug,
+          ownerEmail: ownerEmail?.trim().toLowerCase() || null,
+          ownerPasswordHash,
+          plan,
+          moduleFidelizacion: Boolean(moduleFidelizacion),
+          moduleMensajeria: Boolean(moduleMensajeria),
+          evolutionInstanceName: cleanedInstance,
+          evolutionApiUrl: evolutionApiUrl?.trim() || null,
+          evolutionApiKey: evolutionApiKey?.trim() || null,
+          primaryColor: primaryColor?.trim() || '#00F5D4',
+          secondaryColor: secondaryColor?.trim() || '#00E5FF',
+          logoUrl: logoUrl?.trim() || null,
+          whatsappPhone: whatsappPhone?.trim() || null,
+          googleReviewUrl: googleReviewUrl?.trim() || null,
+          referralCommPct: Number(referralCommPct) || 10,
+          storeReferralCommPct: Number(storeReferralCommPct) || 5,
+        },
+      })
+
+      // Create all initial branches; first one is isMain=true
+      const usedCodes = new Set<string>()
+      const branchDataList = branchNames.map((bName, idx) => {
+        let code = branchCodeFromName(bName.trim()) || `SEDE${idx + 1}`
+        // Deduplicate codes within this batch
+        let dedupCode = code
+        let counter = 2
+        while (usedCodes.has(dedupCode)) {
+          dedupCode = `${code}${counter++}`
+        }
+        usedCodes.add(dedupCode)
+        return {
+          tenantId: tenant.id,
+          name: bName.trim(),
+          code: dedupCode,
+          isMain: idx === 0,
+          isActive: true,
+        }
+      })
+
+      await tx.branch.createMany({ data: branchDataList })
+
+      return [tenant]
     })
 
     // Intentar autoprovisionar instancia en Evolution API si se proporcionó instanceName

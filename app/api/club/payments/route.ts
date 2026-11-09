@@ -3,15 +3,21 @@ import { prisma } from '@/lib/prisma'
 import { sendWhatsAppMessage } from '@/lib/evolution'
 import { getTenantFromRequest } from '@/lib/getTenant'
 
-// GET: Lista pagos pendientes en caja para el tenant autenticado
+// GET: Lista pagos pendientes en caja para el tenant autenticado y la sucursal activa
 export async function GET(req: Request) {
   try {
-    const { tenantId } = await getTenantFromRequest(req)
+    const { tenantId, branchId } = await getTenantFromRequest(req)
+
+    const whereClause: any = { tenantId, status: 'PENDING' }
+    if (branchId) {
+      whereClause.branchId = branchId
+    }
 
     const payments = await prisma.payment.findMany({
-      where: { tenantId, status: 'PENDING' },
+      where: whereClause,
       include: {
         customer: { include: { wallets: true } },
+        branch: { select: { id: true, name: true, code: true } },
       },
       orderBy: { createdAt: 'desc' },
     })

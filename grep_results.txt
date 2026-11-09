@@ -1,0 +1,368 @@
+﻿
+> app\api\club\branches\switch\route.ts:6:// POST /api/club/branches/switch – Mint a new JWT with the selected branchId
+  app\api\club\branches\switch\route.ts:7:export async function POST(req: Request) {
+  app\api\club\branches\switch\route.ts:8:  try {
+> app\api\club\branches\switch\route.ts:12:    const { branchId } = body
+  app\api\club\branches\switch\route.ts:13:
+> app\api\club\branches\switch\route.ts:14:    if (!branchId) {
+  app\api\club\branches\switch\route.ts:15:      return NextResponse.json(
+> app\api\club\branches\switch\route.ts:16:        { success: false, error: 'branchId es requerido' },
+  app\api\club\branches\switch\route.ts:17:        { status: 400 }
+  app\api\club\branches\switch\route.ts:18:      )
+> app\api\club\branches\switch\route.ts:23:      where: { id: branchId, tenantId, isActive: true },
+  app\api\club\branches\switch\route.ts:24:    })
+  app\api\club\branches\switch\route.ts:25:
+> app\api\club\branches\switch\route.ts:33:    // Mint a new JWT with the new branchId
+> app\api\club\branches\switch\route.ts:34:    const newToken = await signTenantToken(tenantId, tenantSlug, role ?? 
+'OWNER', branchId)
+  app\api\club\branches\switch\route.ts:35:
+  app\api\club\branches\switch\route.ts:36:    const response = NextResponse.json({ success: true, branch })
+> app\api\club\branches\route.ts:19:    const branches = await prisma.branch.findMany({
+  app\api\club\branches\route.ts:20:      where: { tenantId },
+  app\api\club\branches\route.ts:21:      orderBy: [{ isMain: 'desc' }, { createdAt: 'asc' }],
+> app\api\club\coaches\route.ts:8:    const { tenantId, branchId } = await getTenantFromRequest(req)
+  app\api\club\coaches\route.ts:9:
+> app\api\club\coaches\route.ts:10:    const whereClause: any = { tenantId }
+> app\api\club\coaches\route.ts:11:    if (branchId) {
+  app\api\club\coaches\route.ts:12:      // Filtrar por la sucursal activa o los que aún no tengan sucursal asignada
+> app\api\club\coaches\route.ts:13:      whereClause.OR = [
+> app\api\club\coaches\route.ts:14:        { branchId },
+> app\api\club\coaches\route.ts:15:        { branchId: null },
+  app\api\club\coaches\route.ts:16:      ]
+  app\api\club\coaches\route.ts:17:    }
+> app\api\club\coaches\route.ts:19:    const coaches = await prisma.staff.findMany({
+> app\api\club\coaches\route.ts:20:      where: whereClause,
+  app\api\club\coaches\route.ts:21:      orderBy: { createdAt: 'desc' },
+  app\api\club\coaches\route.ts:22:      include: {
+> app\api\club\coaches\route.ts:37:    const { tenantId, branchId } = await getTenantFromRequest(req)
+> app\api\club\coaches\route.ts:38:    const { name, role, avatarUrl, targetBranchId } = await req.json()
+  app\api\club\coaches\route.ts:39:
+  app\api\club\coaches\route.ts:40:    if (!name?.trim()) {
+> app\api\club\coaches\route.ts:44:    const finalBranchId = targetBranchId || branchId || null
+  app\api\club\coaches\route.ts:45:
+  app\api\club\coaches\route.ts:46:    const newCoach = await prisma.staff.create({
+> app\api\club\coaches\route.ts:49:        branchId: finalBranchId,
+  app\api\club\coaches\route.ts:50:        name: name.trim(),
+  app\api\club\coaches\route.ts:51:        role: role || 'TRAINER',
+> app\api\club\customers\search\route.ts:12:    const customers = await prisma.customer.findMany({
+  app\api\club\customers\search\route.ts:13:      where: {
+  app\api\club\customers\search\route.ts:14:        tenantId,
+> app\api\club\customers\search\route.ts:25:        wallets: true,
+  app\api\club\customers\search\route.ts:26:      },
+  app\api\club\customers\search\route.ts:27:      take: 10,
+> app\api\club\customers\search\route.ts:37:        balance: c.wallets[0] ? Number(c.wallets[0].balance) : 0,
+  app\api\club\customers\search\route.ts:38:        createdAt: c.createdAt,
+  app\api\club\customers\search\route.ts:39:      })),
+> app\api\club\evaluaciones\list\route.ts:14:    const whereClause: any = { tenantId }
+  app\api\club\evaluaciones\list\route.ts:15:    if (coachFilter && coachFilter !== 'ALL') {
+> app\api\club\evaluaciones\list\route.ts:16:      whereClause.staffId = coachFilter
+  app\api\club\evaluaciones\list\route.ts:17:    }
+  app\api\club\evaluaciones\list\route.ts:18:    if (starsFilter && starsFilter !== 'ALL') {
+> app\api\club\evaluaciones\list\route.ts:19:      whereClause.stars = parseInt(starsFilter)
+  app\api\club\evaluaciones\list\route.ts:20:    }
+  app\api\club\evaluaciones\list\route.ts:21:
+> app\api\club\evaluaciones\list\route.ts:23:      prisma.evaluation.findMany({
+> app\api\club\evaluaciones\list\route.ts:24:        where: whereClause,
+  app\api\club\evaluaciones\list\route.ts:25:        include: {
+  app\api\club\evaluaciones\list\route.ts:26:          customer: true,
+> app\api\club\evaluaciones\list\route.ts:31:      prisma.staff.findMany({
+  app\api\club\evaluaciones\list\route.ts:32:        where: { tenantId, isActive: true },
+  app\api\club\evaluaciones\list\route.ts:33:        include: { evaluations: true },
+> app\api\club\evaluaciones\route.ts:8:    const { tenantId, branchId } = await getTenantFromRequest(req)
+  app\api\club\evaluaciones\route.ts:9:
+> app\api\club\evaluaciones\route.ts:10:    const whereClause: any = { tenantId, isActive: true }
+> app\api\club\evaluaciones\route.ts:11:    if (branchId) {
+> app\api\club\evaluaciones\route.ts:12:      whereClause.OR = [
+> app\api\club\evaluaciones\route.ts:13:        { branchId },
+> app\api\club\evaluaciones\route.ts:14:        { branchId: null },
+  app\api\club\evaluaciones\route.ts:15:      ]
+  app\api\club\evaluaciones\route.ts:16:    }
+> app\api\club\evaluaciones\route.ts:18:    const coaches = await prisma.staff.findMany({
+> app\api\club\evaluaciones\route.ts:19:      where: whereClause,
+  app\api\club\evaluaciones\route.ts:20:      include: {
+  app\api\club\evaluaciones\route.ts:21:        branch: { select: { id: true, name: true, code: true } },
+> app\api\club\passes\route.ts:20:      const passes = await prisma.friendPass.findMany({
+  app\api\club\passes\route.ts:21:        where: { tenantId: tenant.id },
+  app\api\club\passes\route.ts:22:        include: {
+> app\api\club\payments\route.ts:9:    const { tenantId, branchId } = await getTenantFromRequest(req)
+  app\api\club\payments\route.ts:10:
+> app\api\club\payments\route.ts:11:    const whereClause: any = { tenantId, status: 'PENDING' }
+> app\api\club\payments\route.ts:12:    if (branchId) {
+> app\api\club\payments\route.ts:13:      whereClause.OR = [
+> app\api\club\payments\route.ts:14:        { branchId },
+> app\api\club\payments\route.ts:15:        { branchId: null },
+  app\api\club\payments\route.ts:16:      ]
+  app\api\club\payments\route.ts:17:    }
+> app\api\club\payments\route.ts:19:    const payments = await prisma.payment.findMany({
+> app\api\club\payments\route.ts:20:      where: whereClause,
+  app\api\club\payments\route.ts:21:      include: {
+> app\api\club\payments\route.ts:22:        customer: { include: { wallets: true } },
+  app\api\club\payments\route.ts:23:        branch: { select: { id: true, name: true, code: true } },
+  app\api\club\payments\route.ts:24:      },
+> app\api\club\payments\route.ts:35:// POST: Aprobar o rechazar un pago y acreditar cashback a la Wallet
+  app\api\club\payments\route.ts:36:export async function POST(req: Request) {
+  app\api\club\payments\route.ts:37:  try {
+> app\api\club\payments\route.ts:46:        customer: { include: { wallets: true } },
+  app\api\club\payments\route.ts:47:        tenant: true,
+  app\api\club\payments\route.ts:48:      },
+> app\api\club\payments\route.ts:89:      // 2. Obtener o crear Wallet del socio
+> app\api\club\payments\route.ts:90:      let wallet = await tx.wallet.findUnique({
+  app\api\club\payments\route.ts:91:        where: { customerId: payment.customerId },
+  app\api\club\payments\route.ts:92:      })
+> app\api\club\payments\route.ts:93:      if (!wallet) {
+> app\api\club\payments\route.ts:94:        wallet = await tx.wallet.create({
+  app\api\club\payments\route.ts:95:          data: { tenantId: payment.tenantId, customerId: payment.customerId, 
+balance: 0 },
+  app\api\club\payments\route.ts:96:        })
+> app\api\club\payments\route.ts:99:      // 3. Acreditar Cashback a la Wallet
+> app\api\club\payments\route.ts:100:      const newBalance = parseFloat((Number(wallet.balance) + 
+cashbackAmt).toFixed(2))
+> app\api\club\payments\route.ts:101:      const updatedWallet = await tx.wallet.update({
+> app\api\club\payments\route.ts:102:        where: { id: wallet.id },
+  app\api\club\payments\route.ts:103:        data: { balance: newBalance },
+  app\api\club\payments\route.ts:104:      })
+> app\api\club\payments\route.ts:107:      await tx.walletTransaction.create({
+  app\api\club\payments\route.ts:108:        data: {
+  app\api\club\payments\route.ts:109:          tenantId: payment.tenantId,
+> app\api\club\payments\route.ts:110:          walletId: wallet.id,
+  app\api\club\payments\route.ts:111:          type: 'CASHBACK_EARNED',
+  app\api\club\payments\route.ts:112:          amount: cashbackAmt,
+> app\api\club\plans\route.ts:10:    const plans = await prisma.membershipPlan.findMany({
+  app\api\club\plans\route.ts:11:      where: { tenantId },
+  app\api\club\plans\route.ts:12:      orderBy: { price: 'asc' },
+> app\api\club\wallet\audit\route.ts:5:// GET /api/club/wallet/audit: Obtiene métricas de billetera y lista de socios 
+con saldo para la sede activa
+  app\api\club\wallet\audit\route.ts:6:export async function GET(req: Request) {
+  app\api\club\wallet\audit\route.ts:7:  try {
+> app\api\club\wallet\audit\route.ts:8:    const { tenantId, branchId } = await getTenantFromRequest(req)
+  app\api\club\wallet\audit\route.ts:9:
+  app\api\club\wallet\audit\route.ts:10:    // Si hay una sede activa, filtramos los pagos/transacciones para saber 
+los socios que han operado en esta sede
+> app\api\club\wallet\audit\route.ts:13:    if (branchId) {
+  app\api\club\wallet\audit\route.ts:14:      // Socios que tienen pagos en esta sede específica
+> app\api\club\wallet\audit\route.ts:15:      const branchPayments = await prisma.payment.findMany({
+> app\api\club\wallet\audit\route.ts:16:        where: { tenantId, branchId },
+  app\api\club\wallet\audit\route.ts:17:        select: { customerId: true },
+  app\api\club\wallet\audit\route.ts:18:        distinct: ['customerId'],
+> app\api\club\wallet\audit\route.ts:23:    const walletWhere: any = { tenantId }
+  app\api\club\wallet\audit\route.ts:24:    if (branchCustomerIds !== null) {
+> app\api\club\wallet\audit\route.ts:25:      walletWhere.customerId = { in: branchCustomerIds }
+  app\api\club\wallet\audit\route.ts:26:    }
+  app\api\club\wallet\audit\route.ts:27:
+> app\api\club\wallet\audit\route.ts:28:    const wallets = await prisma.wallet.findMany({
+> app\api\club\wallet\audit\route.ts:29:      where: walletWhere,
+  app\api\club\wallet\audit\route.ts:30:      include: {
+  app\api\club\wallet\audit\route.ts:31:        customer: true,
+> app\api\club\wallet\audit\route.ts:35:    const transactions = await prisma.walletTransaction.findMany({
+  app\api\club\wallet\audit\route.ts:36:      where: { tenantId },
+  app\api\club\wallet\audit\route.ts:37:    })
+> app\api\club\wallet\audit\route.ts:39:    const totalBalance = wallets.reduce((acc, curr) => acc + 
+Number(curr.balance), 0)
+  app\api\club\wallet\audit\route.ts:40:    const redeemed = transactions
+  app\api\club\wallet\audit\route.ts:41:      .filter((t) => t.type === 'REDEEMED')
+> app\api\club\wallet\audit\route.ts:44:    const customers = wallets.map((w) => ({
+  app\api\club\wallet\audit\route.ts:45:      id: w.customer.id,
+  app\api\club\wallet\audit\route.ts:46:      name: w.customer.name,
+> app\api\club\wallet\history\route.ts:5:// GET 
+/api/club/wallet/history?customerId=...&page=1&pageSize=20&type=ALL&dateFrom=&dateTo=
+  app\api\club\wallet\history\route.ts:6:export async function GET(req: Request) {
+  app\api\club\wallet\history\route.ts:7:  try {
+> app\api\club\wallet\history\route.ts:23:      include: { wallets: { where: { tenantId } } },
+  app\api\club\wallet\history\route.ts:24:    })
+  app\api\club\wallet\history\route.ts:25:
+> app\api\club\wallet\history\route.ts:30:    const wallet = customer.wallets[0]
+  app\api\club\wallet\history\route.ts:31:
+  app\api\club\wallet\history\route.ts:32:    // Construir filtros de transacciones respetando tenantId
+> app\api\club\wallet\history\route.ts:33:    const txWhere: any = { walletId: wallet?.id, tenantId }
+  app\api\club\wallet\history\route.ts:34:    if (typeFilter !== 'ALL') txWhere.type = typeFilter
+  app\api\club\wallet\history\route.ts:35:    if (dateFrom || dateTo) {
+> app\api\club\wallet\history\route.ts:45:    const totalTx = wallet?.id ? await prisma.walletTransaction.count({ 
+where: txWhere }) : 0
+> app\api\club\wallet\history\route.ts:46:    const transactions = wallet?.id
+> app\api\club\wallet\history\route.ts:47:      ? await prisma.walletTransaction.findMany({
+  app\api\club\wallet\history\route.ts:48:          where: txWhere,
+  app\api\club\wallet\history\route.ts:49:          orderBy: { createdAt: 'desc' },
+> app\api\club\wallet\history\route.ts:56:    const payments = await prisma.payment.findMany({
+  app\api\club\wallet\history\route.ts:57:      where: { customerId, tenantId },
+  app\api\club\wallet\history\route.ts:58:      orderBy: { createdAt: 'desc' },
+> app\api\club\wallet\history\route.ts:67:        balance: Number(wallet?.balance || 0),
+  app\api\club\wallet\history\route.ts:68:        membershipActive: customer.membershipActive,
+  app\api\club\wallet\history\route.ts:69:      },
+> app\api\club\wallet\route.ts:6:// POST /api/club/wallet: Canjea saldo de la billetera en recepción para el tenant 
+autenticado
+  app\api\club\wallet\route.ts:7:export async function POST(req: Request) {
+  app\api\club\wallet\route.ts:8:  try {
+> app\api\club\wallet\route.ts:15:        wallets: { where: { tenantId } },
+  app\api\club\wallet\route.ts:16:        tenant: true,
+  app\api\club\wallet\route.ts:17:      },
+> app\api\club\wallet\route.ts:24:    const wallet = customer.wallets[0]
+> app\api\club\wallet\route.ts:25:    if (!wallet || Number(wallet.balance) < Number(amountToRedeem)) {
+  app\api\club\wallet\route.ts:26:      return NextResponse.json({ error: 'Saldo insuficiente en monedero' }, { 
+status: 400 })
+  app\api\club\wallet\route.ts:27:    }
+> app\api\club\wallet\route.ts:29:    const newBalance = Number(wallet.balance) - Number(amountToRedeem)
+  app\api\club\wallet\route.ts:30:
+  app\api\club\wallet\route.ts:31:    await prisma.$transaction([
+> app\api\club\wallet\route.ts:32:      prisma.wallet.update({
+> app\api\club\wallet\route.ts:33:        where: { id: wallet.id },
+  app\api\club\wallet\route.ts:34:        data: { balance: newBalance },
+  app\api\club\wallet\route.ts:35:      }),
+> app\api\club\wallet\route.ts:36:      prisma.walletTransaction.create({
+  app\api\club\wallet\route.ts:37:        data: {
+> app\api\club\wallet\route.ts:38:          tenantId: wallet.tenantId,
+> app\api\club\wallet\route.ts:39:          walletId: wallet.id,
+  app\api\club\wallet\route.ts:40:          type: 'REDEEMED',
+  app\api\club\wallet\route.ts:41:          amount: amountToRedeem,
+> app\api\club\webhook\whatsapp\route.ts:63:      include: { wallets: { where: { tenantId: tenant.id } } },
+  app\api\club\webhook\whatsapp\route.ts:64:    })
+  app\api\club\webhook\whatsapp\route.ts:65:
+> app\api\club\webhook\whatsapp\route.ts:73:          wallets: { create: { tenantId: tenant.id, balance: 0 } },
+  app\api\club\webhook\whatsapp\route.ts:74:        },
+> app\api\club\webhook\whatsapp\route.ts:75:        include: { wallets: true },
+  app\api\club\webhook\whatsapp\route.ts:76:      })
+  app\api\club\webhook\whatsapp\route.ts:77:    } else if (customer.name.startsWith('Socio ') && message.pushName) {
+> app\api\club\webhook\whatsapp\route.ts:85:    const currentBalance = customer.wallets?.[0] ? 
+Number(customer.wallets[0].balance) : 0
+  app\api\club\webhook\whatsapp\route.ts:86:
+  app\api\club\webhook\whatsapp\route.ts:87:    // -------------------------------------------------------------
+> app\api\club\webhook\whatsapp\route.ts:91:      '/saldo', 'saldo', 'mi saldo', 'cuanto tengo', 'cuanto tengo en mi 
+wallet',
+> app\api\club\webhook\whatsapp\route.ts:92:      'billetera', 'mi billetera', 'wallet', 'monedero', 'puntos', 
+'cashback'
+  app\api\club\webhook\whatsapp\route.ts:93:    ].includes(lowerText)
+  app\api\club\webhook\whatsapp\route.ts:94:
+> app\api\club\webhook\whatsapp\route.ts:114:      const branches = await prisma.branch.findMany({
+  app\api\club\webhook\whatsapp\route.ts:115:        where: { tenantId: tenant.id, isActive: true },
+  app\api\club\webhook\whatsapp\route.ts:116:        orderBy: [{ isMain: 'desc' }, { createdAt: 'asc' }],
+> app\api\club\webhook\whatsapp\route.ts:119:      const branchIdx = parseInt(rawText) - 1
+> app\api\club\webhook\whatsapp\route.ts:120:      if (branchIdx >= 0 && branchIdx < branches.length) {
+> app\api\club\webhook\whatsapp\route.ts:121:        const chosenBranch = branches[branchIdx]
+  app\api\club\webhook\whatsapp\route.ts:122:        const originalAction = 
+pendingBranchSelection.token.split('|ACTION:')[1] || 'MEM'
+  app\api\club\webhook\whatsapp\route.ts:123:
+> app\api\club\webhook\whatsapp\route.ts:154:      const branchIdInToken = 
+pendingCoachSelection.token.split('|BRANCH:')[1] || null
+  app\api\club\webhook\whatsapp\route.ts:155:      const whereCoaches: any = { tenantId: tenant.id, isActive: true }
+> app\api\club\webhook\whatsapp\route.ts:156:      if (branchIdInToken) {
+> app\api\club\webhook\whatsapp\route.ts:157:        whereCoaches.branchId = branchIdInToken
+  app\api\club\webhook\whatsapp\route.ts:158:      }
+  app\api\club\webhook\whatsapp\route.ts:159:
+> app\api\club\webhook\whatsapp\route.ts:160:      const coaches = await prisma.staff.findMany({
+  app\api\club\webhook\whatsapp\route.ts:161:        where: whereCoaches,
+  app\api\club\webhook\whatsapp\route.ts:162:        orderBy: { name: 'asc' },
+> app\api\club\webhook\whatsapp\route.ts:201:            token: 
+`EVAL_STARS_${phone}|COACH:${chosenCoach.id}|BRANCH:${branchIdInToken || ''}`,
+  app\api\club\webhook\whatsapp\route.ts:202:            expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+  app\api\club\webhook\whatsapp\route.ts:203:          },
+> app\api\club\webhook\whatsapp\route.ts:323:      const branchIdInToken = 
+pendingPlanSelection.token.split('|BRANCH:')[1] || null
+  app\api\club\webhook\whatsapp\route.ts:324:      const index = parseInt(rawText) - 1
+> app\api\club\webhook\whatsapp\route.ts:325:      const plans = await prisma.membershipPlan.findMany({
+  app\api\club\webhook\whatsapp\route.ts:326:        where: { tenantId: tenant.id, isActive: true },
+  app\api\club\webhook\whatsapp\route.ts:327:        orderBy: { price: 'asc' },
+> app\api\club\webhook\whatsapp\route.ts:340:        // Crea pago con branchId asignado para que aparezca 
+exclusivamente en la caja de esa sede
+  app\api\club\webhook\whatsapp\route.ts:341:        await prisma.payment.create({
+  app\api\club\webhook\whatsapp\route.ts:342:          data: {
+> app\api\club\webhook\whatsapp\route.ts:344:            branchId: branchIdInToken,
+  app\api\club\webhook\whatsapp\route.ts:345:            customerId: customer.id,
+  app\api\club\webhook\whatsapp\route.ts:346:            type: 'MEMBERSHIP',
+> app\api\club\webhook\whatsapp\route.ts:409:    const branches = await prisma.branch.findMany({
+  app\api\club\webhook\whatsapp\route.ts:410:      where: { tenantId: tenant.id, isActive: true },
+  app\api\club\webhook\whatsapp\route.ts:411:      orderBy: [{ isMain: 'desc' }, { createdAt: 'asc' }],
+> app\api\club\webhook\whatsapp\route.ts:478:  const branchId = branch?.id || null
+  app\api\club\webhook\whatsapp\route.ts:479:  const branchName = branch?.name || 'Centro'
+  app\api\club\webhook\whatsapp\route.ts:480:
+> app\api\club\webhook\whatsapp\route.ts:484:    if (branchId) {
+> app\api\club\webhook\whatsapp\route.ts:485:      whereCoaches.branchId = branchId
+  app\api\club\webhook\whatsapp\route.ts:486:    }
+  app\api\club\webhook\whatsapp\route.ts:487:
+> app\api\club\webhook\whatsapp\route.ts:488:    const coaches = await prisma.staff.findMany({
+  app\api\club\webhook\whatsapp\route.ts:489:      where: whereCoaches,
+  app\api\club\webhook\whatsapp\route.ts:490:      orderBy: { name: 'asc' },
+> app\api\club\webhook\whatsapp\route.ts:518:        token: `EVAL_COACH_SEL_${phone}|BRANCH:${branchId || ''}`,
+  app\api\club\webhook\whatsapp\route.ts:519:        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+  app\api\club\webhook\whatsapp\route.ts:520:      },
+> app\api\club\webhook\whatsapp\route.ts:528:    const plans = await prisma.membershipPlan.findMany({
+  app\api\club\webhook\whatsapp\route.ts:529:      where: { tenantId: tenant.id, isActive: true },
+  app\api\club\webhook\whatsapp\route.ts:530:      orderBy: { price: 'asc' },
+> app\api\club\webhook\whatsapp\route.ts:551:        token: `PLAN_SEL_${phone}|BRANCH:${branchId || ''}`,
+  app\api\club\webhook\whatsapp\route.ts:552:        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+  app\api\club\webhook\whatsapp\route.ts:553:      },
+> app\api\club\webhook\whatsapp\route.ts:563:    // Registra pago en estado PENDING con el branchId de la sede
+  app\api\club\webhook\whatsapp\route.ts:564:    await prisma.payment.create({
+  app\api\club\webhook\whatsapp\route.ts:565:      data: {
+> app\api\club\webhook\whatsapp\route.ts:567:        branchId,
+  app\api\club\webhook\whatsapp\route.ts:568:        customerId: customer.id,
+  app\api\club\webhook\whatsapp\route.ts:569:        type: 'RETAIL',
+> app\club\billetera\page.tsx:6:  Wallet,
+  app\club\billetera\page.tsx:7:  Sparkles,
+  app\club\billetera\page.tsx:8:  RefreshCw,
+> app\club\billetera\page.tsx:22:export default function WalletAudit() {
+  app\club\billetera\page.tsx:23:  const [data, setData] = useState<any>({ totalBalance: 0, redeemed: 0, customers: [] 
+})
+  app\club\billetera\page.tsx:24:  const [loading, setLoading] = useState(true)
+> app\club\billetera\page.tsx:44:  const fetchWalletData = async () => {
+  app\club\billetera\page.tsx:45:    try {
+  app\club\billetera\page.tsx:46:      setLoading(true)
+> app\club\billetera\page.tsx:47:      const res = await axios.get('/api/club/wallet/audit')
+  app\club\billetera\page.tsx:48:      setData(res.data)
+  app\club\billetera\page.tsx:49:    } catch (e) {
+> app\club\billetera\page.tsx:50:      console.error('Error cargando wallet:', e)
+  app\club\billetera\page.tsx:51:    } finally {
+  app\club\billetera\page.tsx:52:      setLoading(false)
+> app\club\billetera\page.tsx:57:    fetchWalletData()
+  app\club\billetera\page.tsx:58:  }, [])
+  app\club\billetera\page.tsx:59:
+> app\club\billetera\page.tsx:74:      const res = await axios.get(`/api/club/wallet/history?${params.toString()}`)
+  app\club\billetera\page.tsx:75:      if (page === 1) {
+  app\club\billetera\page.tsx:76:        setCustomerHistory(res.data)
+> app\club\billetera\page.tsx:118:            <Wallet className="w-7 h-7" style={{ color: 'var(--color-primary, 
+#00F5D4)' }} />
+  app\club\billetera\page.tsx:119:          </h1>
+  app\club\billetera\page.tsx:120:          <p className="text-sm text-zinc-400 mt-1">
+> app\club\billetera\page.tsx:126:          onClick={fetchWalletData}
+  app\club\billetera\page.tsx:127:          className="p-2.5 rounded-xl bg-[var(--bg-card,#05101C)] border 
+border-[var(--border-card,rgba(0,245,212,0.15))] transition-all text-zinc-400 hover:text-white self-start sm:self-auto"
+  app\club\billetera\page.tsx:128:        >
+> app\club\dashboard\page.tsx:115:      const res = await axios.get('/api/club/wallet/audit')
+  app\club\dashboard\page.tsx:116:      if (res.data) {
+  app\club\dashboard\page.tsx:117:        setGlobalStats({
+> app\club\dashboard\page.tsx:124:      console.error('Error fetching global wallet stats:', e)
+  app\club\dashboard\page.tsx:125:    }
+  app\club\dashboard\page.tsx:126:  }
+> app\club\dashboard\page.tsx:241:      const res = await axios.post('/api/club/wallet', {
+  app\club\dashboard\page.tsx:242:        customerId: selectedCustomer.id,
+  app\club\dashboard\page.tsx:243:        amountToRedeem: amount,
+> app\club\dashboard\page.tsx:890:                          balance: Number(item.customer.wallets?.[0]?.balance || 0),
+  app\club\dashboard\page.tsx:891:                        })
+  app\club\dashboard\page.tsx:892:                        setIsDrawerOpen(true)
+> app\club\layout.tsx:23:  let branchId: string | undefined = undefined
+  app\club\layout.tsx:24:  let branchName: string | undefined = undefined
+  app\club\layout.tsx:25:
+> app\club\layout.tsx:29:      const { tenantId, branchId: tokenBranchId } = payload
+  app\club\layout.tsx:30:
+  app\club\layout.tsx:31:      const tenant = await prisma.tenant.findUnique({
+> app\club\layout.tsx:59:      const resolvedBranchId = tokenBranchId ?? undefined
+> app\club\layout.tsx:60:      if (resolvedBranchId) {
+  app\club\layout.tsx:61:        const branch = await prisma.branch.findFirst({
+> app\club\layout.tsx:62:          where: { id: resolvedBranchId, tenantId, isActive: true },
+  app\club\layout.tsx:63:          select: { id: true, name: true },
+  app\club\layout.tsx:64:        })
+> app\club\layout.tsx:66:          branchId = branch.id
+  app\club\layout.tsx:67:          branchName = branch.name
+  app\club\layout.tsx:68:        }
+> app\club\layout.tsx:72:      if (!branchId) {
+  app\club\layout.tsx:73:        const mainBranch = await prisma.branch.findFirst({
+  app\club\layout.tsx:74:          where: { tenantId, isMain: true, isActive: true },
+> app\club\layout.tsx:78:          branchId = mainBranch.id
+  app\club\layout.tsx:79:          branchName = mainBranch.name
+  app\club\layout.tsx:80:        }
+> app\club\layout.tsx:109:        branchId = mainBranch.id
+  app\club\layout.tsx:110:        branchName = mainBranch.name
+  app\club\layout.tsx:111:      }
+> app\club\layout.tsx:122:      branchId={branchId}
+  app\club\layout.tsx:123:      branchName={branchName}
+  app\club\layout.tsx:124:    >
+
+

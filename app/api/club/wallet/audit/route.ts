@@ -2,13 +2,31 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getTenantFromRequest } from '@/lib/getTenant'
 
-// GET /api/club/wallet/audit: Obtiene métricas globales de billetera y lista de socios con saldo para el tenant
+// GET /api/club/wallet/audit: Obtiene métricas de billetera y lista de socios con saldo para la sede activa
 export async function GET(req: Request) {
   try {
-    const { tenantId } = await getTenantFromRequest(req)
+    const { tenantId, branchId } = await getTenantFromRequest(req)
+
+    // Si hay una sede activa, filtramos los pagos/transacciones para saber los socios que han operado en esta sede
+    let branchCustomerIds: string[] | null = null
+
+    if (branchId) {
+      // Socios que tienen pagos en esta sede específica
+      const branchPayments = await prisma.payment.findMany({
+        where: { tenantId, branchId },
+        select: { customerId: true },
+        distinct: ['customerId'],
+      })
+      branchCustomerIds = branchPayments.map((p) => p.customerId)
+    }
+
+    const walletWhere: any = { tenantId }
+    if (branchCustomerIds !== null) {
+      walletWhere.customerId = { in: branchCustomerIds }
+    }
 
     const wallets = await prisma.wallet.findMany({
-      where: { tenantId },
+      where: walletWhere,
       include: {
         customer: true,
       },

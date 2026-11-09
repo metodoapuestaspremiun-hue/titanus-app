@@ -14,8 +14,10 @@ import {
 } from 'lucide-react'
 import axios from 'axios'
 import { coach_1_jpg, coach_2_jpg, coach_3_jpg } from '@/lib/brandingImages'
+import { useTheme } from '@/components/ThemeProvider'
 
 export default function CoachesRanking() {
+  const theme = useTheme()
   const [coaches, setCoaches] = useState<any[]>([])
   const [evaluations, setEvaluations] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -61,7 +63,7 @@ export default function CoachesRanking() {
             <Trophy className="w-7 h-7" style={{ color: 'var(--accent-gold, #F59E0B)' }} />
           </h1>
           <p className="text-sm text-zinc-400 mt-1">
-            Calificaciones de socios en tiempo real. Haz clic en cualquier entrenador para ver todas sus opiniones.
+            Calificaciones de socios en tiempo real en <strong className="text-white">{theme.branchName || 'Sede Principal'}</strong>.
           </p>
         </div>
 
