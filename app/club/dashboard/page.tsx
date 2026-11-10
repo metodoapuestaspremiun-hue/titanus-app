@@ -18,7 +18,9 @@ import {
   Download,
   Ticket,
   UserCheck,
-  AlertCircle
+  AlertCircle,
+  Gift,
+  UserPlus
 } from 'lucide-react'
 import axios from 'axios'
 import { QRCodeSVG } from 'qrcode.react'
@@ -72,6 +74,13 @@ export default function ReceptionDashboard() {
   const [friendPhone, setFriendPhone] = useState('')
   const [redeemingPass, setRedeemingPass] = useState(false)
   const [passSuccess, setPassSuccess] = useState<string | null>(null)
+
+  // Referidos en aprobación de membresía
+  const [referralSelected, setReferralSelected] = useState<Record<string, any>>({}) // paymentId -> customer
+  const [referralSearchPaymentId, setReferralSearchPaymentId] = useState<string | null>(null)
+  const [referralQuery, setReferralQuery] = useState('')
+  const [referralResults, setReferralResults] = useState<any[]>([])
+  const [referralSearching, setReferralSearching] = useState(false)
 
   // Sondeo automático del estado del QR proyectado (cambia automáticamente cuando el socio lo consume)
   useEffect(() => {
@@ -162,6 +171,25 @@ export default function ReceptionDashboard() {
     return () => clearTimeout(delay)
   }, [searchQuery])
 
+  useEffect(() => {
+    if (!referralSearchPaymentId) {
+      setReferralResults([])
+      return
+    }
+    const delay = setTimeout(async () => {
+      try {
+        setReferralSearching(true)
+        const res = await axios.get(`/api/club/customers/search?q=${encodeURIComponent(referralQuery)}`)
+        setReferralResults(res.data.customers || [])
+      } catch (e) {
+        console.error('Error buscando referente:', e)
+      } finally {
+        setReferralSearching(false)
+      }
+    }, 250)
+    return () => clearTimeout(delay)
+  }, [referralQuery, referralSearchPaymentId])
+
   const handleApprove = async (id: string, type: string, currentAmount: number) => {
     // Para compras en Tienda/Barra, mostrar modal con producto + monto
     if (type === 'RETAIL') {
@@ -178,7 +206,19 @@ export default function ReceptionDashboard() {
 
     try {
       setLoading(true)
-      await axios.post('/api/club/payments', { paymentId: id, action: 'APPROVE', finalAmount: currentAmount })
+      const referrerCustomerId = referralSelected[id]?.id || null
+      await axios.post('/api/club/payments', {
+        paymentId: id,
+        action: 'APPROVE',
+        finalAmount: currentAmount,
+        referrerCustomerId,
+      })
+      // Limpiar selección de referido para este pago
+      setReferralSelected(prev => {
+        const next = { ...prev }
+        delete next[id]
+        return next
+      })
       await fetchPendingPayments()
     } catch (e: any) {
       alert('Error aprobando pago: ' + (e.response?.data?.error || e.message))
@@ -872,6 +912,51 @@ export default function ReceptionDashboard() {
                         +${Number(item.cashbackAmt).toFixed(2)} USD Cashback ({Number(item.cashbackPct)}%)
                       </span>
                     </div>
+
+                    {/* Selector de Referido para Membresías */}
+                    {item.type === 'MEMBERSHIP' && (
+                      <div className="mt-2 flex items-center gap-2">
+                        {referralSelected[item.id] ? (
+                          <div
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold border"
+                            style={{
+                              backgroundColor: 'color-mix(in srgb, var(--accent-gold, #F59E0B) 12%, transparent)',
+                              borderColor: 'color-mix(in srgb, var(--accent-gold, #F59E0B) 30%, transparent)',
+                              color: 'var(--accent-gold, #F59E0B)',
+                            }}
+                          >
+                            <Gift className="w-3.5 h-3.5" />
+                            <span>Referido por: {referralSelected[item.id].name} (+{referralSelected[item.id].phone?.slice(-4)})</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setReferralSelected(prev => {
+                                  const next = { ...prev }
+                                  delete next[item.id]
+                                  return next
+                                })
+                              }}
+                              className="ml-1 text-zinc-400 hover:text-white"
+                              title="Quitar referente"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setReferralSearchPaymentId(item.id)
+                              setReferralQuery('')
+                            }}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-zinc-900 border border-white/10 text-zinc-400 hover:text-amber-400 hover:border-amber-400/30 transition-all"
+                          >
+                            <UserPlus className="w-3 h-3" />
+                            <span>¿Fue referido por un socio?</span>
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -1346,6 +1431,114 @@ export default function ReceptionDashboard() {
                 </div>
               </form>
             )}
+          </div>
+        </div>
+      )}
+      {/* Modal Selector de Socio Referente */}
+      {referralSearchPaymentId && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div
+            className="w-full max-w-md rounded-3xl border p-6 space-y-4 relative shadow-2xl"
+            style={{
+              backgroundColor: 'var(--bg-card, #05101C)',
+              borderColor: 'var(--border-card, rgba(0,245,212,0.2))',
+            }}
+          >
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div
+                  className="w-9 h-9 rounded-xl flex items-center justify-center"
+                  style={{
+                    backgroundColor: 'color-mix(in srgb, var(--accent-gold, #F59E0B) 15%, transparent)',
+                    color: 'var(--accent-gold, #F59E0B)',
+                  }}
+                >
+                  <Gift className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-white">Socio que lo Refirió</h3>
+                  <p className="text-xs text-zinc-400">Recibirá bono de comisión en su billetera</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReferralSearchPaymentId(null)}
+                className="p-1.5 rounded-lg bg-zinc-900 text-zinc-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Buscador */}
+            <div className="relative">
+              <Search className="w-4 h-4 text-zinc-500 absolute left-3.5 top-3.5" />
+              <input
+                type="text"
+                autoFocus
+                placeholder="Buscar por nombre o celular del socio..."
+                value={referralQuery}
+                onChange={(e) => setReferralQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 bg-zinc-900 border border-white/10 rounded-xl text-xs text-white placeholder-zinc-500 focus:outline-none"
+              />
+            </div>
+
+            {/* Lista de resultados */}
+            <div className="max-h-60 overflow-y-auto space-y-1.5 divide-y divide-white/5">
+              {referralSearching ? (
+                <div className="py-6 text-center text-xs text-zinc-500">Buscando socios...</div>
+              ) : referralResults.length === 0 ? (
+                <div className="py-6 text-center text-xs text-zinc-500">
+                  {referralQuery ? 'No se encontraron socios con ese término.' : 'Escribe para buscar socios existentes...'}
+                </div>
+              ) : (
+                referralResults.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => {
+                      setReferralSelected(prev => ({
+                        ...prev,
+                        [referralSearchPaymentId]: c,
+                      }))
+                      setReferralSearchPaymentId(null)
+                    }}
+                    className="w-full p-2.5 rounded-xl flex items-center justify-between hover:bg-white/5 transition-all text-left"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="w-8 h-8 rounded-full bg-zinc-900 flex items-center justify-center font-bold text-xs border"
+                        style={{
+                          color: 'var(--accent-gold, #F59E0B)',
+                          borderColor: 'color-mix(in srgb, var(--accent-gold, #F59E0B) 30%, transparent)',
+                        }}
+                      >
+                        {c.name.charAt(0)}
+                      </div>
+                      <div>
+                        <span className="font-bold text-white text-xs block">{c.name}</span>
+                        <span className="text-[10px] text-zinc-400 font-mono">+{c.phone}</span>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-xs font-black" style={{ color: 'var(--color-primary, #00F5D4)' }}>
+                        ${c.balance.toFixed(2)} USD
+                      </span>
+                      <span className="block text-[9px] text-zinc-500">Saldo actual</span>
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+
+            <div className="pt-2 border-t border-white/10 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setReferralSearchPaymentId(null)}
+                className="px-4 py-2 rounded-xl bg-zinc-900 text-zinc-300 text-xs font-bold hover:text-white"
+              >
+                Cerrar
+              </button>
+            </div>
           </div>
         </div>
       )}

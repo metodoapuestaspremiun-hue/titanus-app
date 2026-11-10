@@ -7,41 +7,38 @@ export async function GET(req: Request) {
   try {
     const { tenantId, branchId } = await getTenantFromRequest(req)
 
-    // Si hay una sede activa, filtramos los pagos/transacciones para saber los socios que han operado en esta sede
-    let branchCustomerIds: string[] | null = null
+    // MÉTRICAS GLOBALES: el total circulante y canjeado es de TODO el gimnasio
+    const allWallets = await prisma.wallet.findMany({
+      where: { tenantId },
+      include: { customer: true },
+    })
 
+    const allTransactions = await prisma.walletTransaction.findMany({
+      where: { tenantId },
+    })
+
+    const totalBalance = allWallets.reduce((acc, curr) => acc + Number(curr.balance), 0)
+    const redeemed = allTransactions
+      .filter((t) => t.type === 'REDEEMED')
+      .reduce((acc, curr) => acc + Number(curr.amount), 0)
+
+    // LISTA DE CLIENTES: solo los que han operado (pagado) en la sede activa
+    // Si no hay sede activa, se muestran todos los socios
+    let customerIds: string[] | null = null
     if (branchId) {
-      // Socios que tienen pagos en esta sede específica
       const branchPayments = await prisma.payment.findMany({
         where: { tenantId, branchId },
         select: { customerId: true },
         distinct: ['customerId'],
       })
-      branchCustomerIds = branchPayments.map((p) => p.customerId)
+      customerIds = branchPayments.map((p) => p.customerId)
     }
 
-    const walletWhere: any = { tenantId }
-    if (branchCustomerIds !== null) {
-      walletWhere.customerId = { in: branchCustomerIds }
-    }
+    const filteredWallets = customerIds !== null
+      ? allWallets.filter((w) => customerIds!.includes(w.customerId))
+      : allWallets
 
-    const wallets = await prisma.wallet.findMany({
-      where: walletWhere,
-      include: {
-        customer: true,
-      },
-    })
-
-    const transactions = await prisma.walletTransaction.findMany({
-      where: { tenantId },
-    })
-
-    const totalBalance = wallets.reduce((acc, curr) => acc + Number(curr.balance), 0)
-    const redeemed = transactions
-      .filter((t) => t.type === 'REDEEMED')
-      .reduce((acc, curr) => acc + Number(curr.amount), 0)
-
-    const customers = wallets.map((w) => ({
+    const customers = filteredWallets.map((w) => ({
       id: w.customer.id,
       name: w.customer.name,
       phone: w.customer.phone,

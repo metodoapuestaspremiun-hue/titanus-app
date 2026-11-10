@@ -33,9 +33,10 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const { tenantId } = await getTenantFromRequest(req)
-    const { paymentId, action, finalAmount, productDescription } = await req.json()
+    const { paymentId, action, finalAmount, productDescription, referrerCustomerId } = await req.json()
     // action: 'APPROVE' | 'REJECT'
     // finalAmount: opcional, para cuando recepción edita el monto de retail
+    // referrerCustomerId: opcional, socio que lo refirió para acreditarle comisión/bono
 
     const payment = await prisma.payment.findFirst({
       where: { id: paymentId, tenantId },
@@ -67,6 +68,15 @@ export async function POST(req: Request) {
     const cashbackPct = Number(payment.cashbackPct)
     const cashbackAmt = parseFloat(((amount * cashbackPct) / 100).toFixed(2))
 
+    // Verificar socio referente si se proporcionó
+    let referrerCustomer: any = null
+    if (referrerCustomerId && payment.type === 'MEMBERSHIP') {
+      referrerCustomer = await prisma.customer.findFirst({
+        where: { id: referrerCustomerId, tenantId },
+        include: { wallets: true },
+      })
+    }
+
     const result = await prisma.$transaction(async (tx) => {
       // 1. Actualizar pago como aprobado con monto definitivo y descripción del producto
       const descFinal = productDescription
@@ -83,7 +93,7 @@ export async function POST(req: Request) {
         },
       })
 
-      // 2. Obtener o crear Wallet del socio
+      // 2. Obtener o crear Wallet del socio que paga
       let wallet = await tx.wallet.findUnique({
         where: { customerId: payment.customerId },
       })
@@ -93,7 +103,7 @@ export async function POST(req: Request) {
         })
       }
 
-      // 3. Acreditar Cashback a la Wallet
+      // 3. Acreditar Cashback a la Wallet del socio pagador
       const newBalance = parseFloat((Number(wallet.balance) + cashbackAmt).toFixed(2))
       const updatedWallet = await tx.wallet.update({
         where: { id: wallet.id },
@@ -112,7 +122,41 @@ export async function POST(req: Request) {
         },
       })
 
-      // 5. Si es pago de MENSUALIDAD (MEMBERSHIP), generar 2 PASES DE AMIGO (FriendPass)
+      // 5. Si hay socio referente, acreditar Bono de Referido a su wallet
+      let referrerBonusAmt = 0
+      let referrerNewBalance = 0
+      if (referrerCustomer && referrerCustomer.id !== payment.customerId) {
+        const refCommPct = Number(payment.tenant.referralCommPct || 10.0)
+        referrerBonusAmt = parseFloat(((amount * refCommPct) / 100).toFixed(2))
+
+        let refWallet = await tx.wallet.findUnique({
+          where: { customerId: referrerCustomer.id },
+        })
+        if (!refWallet) {
+          refWallet = await tx.wallet.create({
+            data: { tenantId: payment.tenantId, customerId: referrerCustomer.id, balance: 0 },
+          })
+        }
+
+        referrerNewBalance = parseFloat((Number(refWallet.balance) + referrerBonusAmt).toFixed(2))
+        await tx.wallet.update({
+          where: { id: refWallet.id },
+          data: { balance: referrerNewBalance },
+        })
+
+        await tx.walletTransaction.create({
+          data: {
+            tenantId: payment.tenantId,
+            walletId: refWallet.id,
+            type: 'CASHBACK_EARNED',
+            amount: referrerBonusAmt,
+            description: `🎁 Bono de Referido por inscripción de ${payment.customer.name} - $${amount.toFixed(2)} (${refCommPct}%)`,
+            referenceId: payment.id,
+          },
+        })
+      }
+
+      // 6. Si es pago de MENSUALIDAD (MEMBERSHIP), generar 2 PASES DE AMIGO (FriendPass)
       const friendPassCodes: string[] = []
       if (payment.type === 'MEMBERSHIP') {
         const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 días de vigencia
@@ -133,7 +177,7 @@ export async function POST(req: Request) {
         }
       }
 
-      return { updatedPayment, newBalance, friendPassCodes }
+      return { updatedPayment, newBalance, friendPassCodes, referrerBonusAmt, referrerNewBalance }
     })
 
     const tipo = payment.type === 'MEMBERSHIP' ? 'cuota mensual' : 'compra en barra'
@@ -149,11 +193,21 @@ export async function POST(req: Request) {
         `_(Válidos por 30 días · Un solo uso por código)_`
     }
 
+    // WhatsApp al cliente pagador
     await sendWhatsAppMessage(
       payment.customer.phone,
       `✅ *¡Pago Aprobado en Caja!*\n\n🏋️ *${payment.tenant.name}*\n\n💵 ${tipo.charAt(0).toUpperCase() + tipo.slice(1)}: *$${amount.toFixed(2)} USD*${prodLine}\n🎁 Cashback acreditado: *+$${cashbackAmt.toFixed(2)} USD* (${cashbackPct}%)\n💰 Tu nuevo saldo en Monedero: *$${result.newBalance.toFixed(2)} USD*${passesSection}\n\n¡Gracias por tu visita! Puedes canjear tu saldo acumulado en recepción. 💪`,
       instanceName
     )
+
+    // WhatsApp al socio referente si aplica
+    if (referrerCustomer && result.referrerBonusAmt > 0) {
+      await sendWhatsAppMessage(
+        referrerCustomer.phone,
+        `🎉 *¡Felicitaciones, ${referrerCustomer.name}! Recompensa por Referido*\n\n🏋️ *${payment.tenant.name}*\n\nTu amigo *${payment.customer.name}* acaba de activar su mensualidad en el gimnasio indicando que tú lo referiste.\n\n🎁 *Bono Acreditado:* *+$${result.referrerBonusAmt.toFixed(2)} USD*\n💰 *Tu nuevo saldo en Monedero:* *$${result.referrerNewBalance.toFixed(2)} USD*\n\nPuedes canjear este saldo en tu próxima mensualidad o en la barra. ¡Gracias por recomendar a Titanus! 💪`,
+        instanceName
+      )
+    }
 
     return NextResponse.json({ success: true, status: 'APPROVED', newBalance: result.newBalance })
   } catch (error: any) {
