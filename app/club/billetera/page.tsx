@@ -55,43 +55,153 @@ export default function WalletAudit() {
   const [showAllTransactions, setShowAllTransactions] = useState(false)
   const [showAllPayments, setShowAllPayments] = useState(false)
 
-  // Función para exportar historial del socio a CSV
+  // Función para exportar historial del socio en formato Excel (.xls con tabla nativa)
   const exportCustomerDataCSV = () => {
     if (!customerHistory) return
     const customer = customerHistory.customer
     const transactions = customerHistory.transactions || []
     const payments = customerHistory.payments || []
 
-    let csvContent = '\uFEFF' // UTF-8 BOM
-    csvContent += `REPORTE DE BILLETERA & CONSUMOS - ${customer.name}\n`
-    csvContent += `Telefono: +${customer.phone}\n`
-    csvContent += `Saldo Actual: $${customer.balance.toFixed(2)} USD\n`
-    csvContent += `Fecha Reporte: ${new Date().toLocaleString('es-EC')}\n\n`
+    const customerData = data.customers.find((c: any) => c.id === customer.id)
+    const membershipExpiry = customer.membershipExpiry || customerData?.membershipExpiry
+    const cashbackDeadline = customerData?.cashbackDeadline
 
-    csvContent += `--- MOVIMIENTOS DE SALDO ---\n`
-    csvContent += `Fecha,Tipo,Concepto,Monto (USD)\n`
-    transactions.forEach((tx: any) => {
-      const date = new Date(tx.createdAt).toLocaleDateString('es-EC')
-      const type = tx.type === 'CASHBACK_EARNED' ? 'Cashback Ganado' : 'Canje en Mostrador'
-      const desc = `"${(tx.description || '').replace(/"/g, '""')}"`
-      const sign = tx.type === 'CASHBACK_EARNED' ? '+' : '-'
-      csvContent += `${date},${type},${desc},${sign}${tx.amount.toFixed(2)}\n`
-    })
+    // Construcción de documento compatible con Excel (.xls HTML table nativo)
+    // Se abre en columnas perfectas con estilos, encabezados y colores sin configuraciones raras.
+    let tableHtml = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Estado de Cuenta</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->
+        <meta http-equiv="content-type" content="text/plain; charset=UTF-8"/>
+        <style>
+          body { font-family: Calibri, Arial, sans-serif; }
+          .header-title { font-size: 16pt; font-weight: bold; color: #1e293b; background-color: #f1f5f9; text-align: center; height: 35px; }
+          .info-label { font-weight: bold; background-color: #f8fafc; color: #475569; width: 180px; }
+          .info-val { color: #0f172a; }
+          .section-title { font-size: 12pt; font-weight: bold; background-color: #0f172a; color: #ffffff; text-align: left; height: 28px; }
+          .th-col { background-color: #e2e8f0; font-weight: bold; color: #334155; border: 0.5pt solid #cbd5e1; text-align: left; height: 25px; }
+          .td-cell { border: 0.5pt solid #e2e8f0; color: #1e293b; vertical-align: middle; }
+          .td-earned { color: #15803d; font-weight: bold; border: 0.5pt solid #e2e8f0; }
+          .td-redeemed { color: #b45309; font-weight: bold; border: 0.5pt solid #e2e8f0; }
+        </style>
+      </head>
+      <body>
+        <table border="0" cellpadding="5" cellspacing="0">
+          <tr>
+            <td colspan="5" class="header-title">ESTADO DE CUENTA & BILLETERA DIGITAL</td>
+          </tr>
+          <tr>
+            <td class="info-label">Socio:</td>
+            <td colspan="4" class="info-val"><b>${customer.name}</b></td>
+          </tr>
+          <tr>
+            <td class="info-label">Tel&eacute;fono WhatsApp:</td>
+            <td colspan="4" class="info-val">+${customer.phone}</td>
+          </tr>
+          <tr>
+            <td class="info-label">Saldo Disponible en Monedero:</td>
+            <td colspan="4" class="info-val" style="color: #0d9488; font-size: 13pt;"><b>$${customer.balance.toFixed(2)} USD</b></td>
+          </tr>
+          <tr>
+            <td class="info-label">Fin de Mensualidad:</td>
+            <td colspan="4" class="info-val">${membershipExpiry ? new Date(membershipExpiry).toLocaleDateString('es-EC', { day: '2-digit', month: 'short', year: 'numeric' }) : 'No registrada'}</td>
+          </tr>
+          <tr>
+            <td class="info-label">Vigencia L&iacute;mite Cashback:</td>
+            <td colspan="4" class="info-val">${cashbackDeadline ? new Date(cashbackDeadline).toLocaleDateString('es-EC', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Vigente'}</td>
+          </tr>
+          <tr>
+            <td class="info-label">Fecha de Emisi&oacute;n:</td>
+            <td colspan="4" class="info-val">${new Date().toLocaleString('es-EC')}</td>
+          </tr>
+          <tr><td colspan="5" style="height: 15px;"></td></tr>
 
-    csvContent += `\n--- CONSUMOS REGISTRADOS ---\n`
-    csvContent += `Fecha,Tipo,Descripcion,Total Pagado (USD),Cashback Generado (USD)\n`
-    payments.forEach((p: any) => {
-      const date = new Date(p.createdAt).toLocaleDateString('es-EC')
-      const type = p.type === 'MEMBERSHIP' ? 'Mensualidad' : 'Tienda / Barra'
-      const desc = `"${(p.description || '').replace(/"/g, '""')}"`
-      csvContent += `${date},${type},${desc},${p.amount.toFixed(2)},${p.cashbackAmt.toFixed(2)}\n`
-    })
+          <!-- TABLA 1: MOVIMIENTOS DE SALDO -->
+          <tr>
+            <td colspan="5" class="section-title">&nbsp;1. MOVIMIENTOS DE SALDO Y CASHBACK</td>
+          </tr>
+          <tr style="height: 25px;">
+            <th class="th-col" style="width: 100px;">Fecha</th>
+            <th class="th-col" style="width: 140px;">Tipo de Movimiento</th>
+            <th class="th-col" style="width: 280px;">Concepto / Detalle</th>
+            <th class="th-col" style="width: 110px; text-align: right;">Monto (USD)</th>
+            <th class="th-col" style="width: 90px; text-align: center;">Estado</th>
+          </tr>
+    `
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    if (transactions.length === 0) {
+      tableHtml += `
+        <tr>
+          <td colspan="5" class="td-cell" style="text-align: center; color: #94a3b8; font-style: italic;">Sin movimientos registrados en el monedero</td>
+        </tr>
+      `
+    } else {
+      transactions.forEach((tx: any) => {
+        const isEarned = tx.type === 'CASHBACK_EARNED'
+        const date = new Date(tx.createdAt).toLocaleDateString('es-EC')
+        const typeStr = isEarned ? 'Cashback Ganado' : 'Canje en Mostrador'
+        const sign = isEarned ? '+' : '-'
+        tableHtml += `
+          <tr>
+            <td class="td-cell">${date}</td>
+            <td class="td-cell">${typeStr}</td>
+            <td class="td-cell">${tx.description || '-'}</td>
+            <td class="${isEarned ? 'td-earned' : 'td-redeemed'}" style="text-align: right;">${sign}$${tx.amount.toFixed(2)}</td>
+            <td class="td-cell" style="text-align: center;">Aprobado</td>
+          </tr>
+        `
+      })
+    }
+
+    tableHtml += `
+          <tr><td colspan="5" style="height: 20px;"></td></tr>
+
+          <!-- TABLA 2: CONSUMOS Y MEMBRESÍAS -->
+          <tr>
+            <td colspan="5" class="section-title">&nbsp;2. CONSUMOS Y COMPRAS REGISTRADAS</td>
+          </tr>
+          <tr style="height: 25px;">
+            <th class="th-col" style="width: 100px;">Fecha</th>
+            <th class="th-col" style="width: 140px;">Categor&iacute;a</th>
+            <th class="th-col" style="width: 280px;">Descripci&oacute;n del Plan / Producto</th>
+            <th class="th-col" style="width: 110px; text-align: right;">Total Pagado</th>
+            <th class="th-col" style="width: 90px; text-align: right;">Cashback (+)</th>
+          </tr>
+    `
+
+    if (payments.length === 0) {
+      tableHtml += `
+        <tr>
+          <td colspan="5" class="td-cell" style="text-align: center; color: #94a3b8; font-style: italic;">Sin consumos registrados</td>
+        </tr>
+      `
+    } else {
+      payments.forEach((p: any) => {
+        const date = new Date(p.createdAt).toLocaleDateString('es-EC')
+        const typeStr = p.type === 'MEMBERSHIP' ? 'Mensualidad' : 'Tienda / Barra'
+        tableHtml += `
+          <tr>
+            <td class="td-cell">${date}</td>
+            <td class="td-cell">${typeStr}</td>
+            <td class="td-cell">${p.description || '-'}</td>
+            <td class="td-cell" style="text-align: right;">$${p.amount.toFixed(2)}</td>
+            <td class="td-earned" style="text-align: right;">+$${p.cashbackAmt.toFixed(2)}</td>
+          </tr>
+        `
+      })
+    }
+
+    tableHtml += `
+        </table>
+      </body>
+      </html>
+    `
+
+    const blob = new Blob([tableHtml], { type: 'application/vnd.ms-excel;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.setAttribute('download', `Billetera_${customer.name.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`)
+    link.setAttribute('download', `Estado_Cuenta_${customer.name.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.xls`)
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
