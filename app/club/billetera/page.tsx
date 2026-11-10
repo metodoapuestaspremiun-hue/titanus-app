@@ -17,7 +17,8 @@ import {
   ListFilter,
   CheckCircle,
   AlertTriangle,
-  Gift
+  Gift,
+  Download
 } from 'lucide-react'
 import axios from 'axios'
 import { action_membership_jpg, action_bar_jpg, action_coach_jpg } from '@/lib/brandingImages'
@@ -49,6 +50,53 @@ export default function WalletAudit() {
   const [redeemDesc, setRedeemDesc] = useState('')
   const [redeemLoading, setRedeemLoading] = useState(false)
   const [redeemMsg, setRedeemMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null)
+
+  // Estados para limitar vistas a 5 elementos con "Ver más"
+  const [showAllTransactions, setShowAllTransactions] = useState(false)
+  const [showAllPayments, setShowAllPayments] = useState(false)
+
+  // Función para exportar historial del socio a CSV
+  const exportCustomerDataCSV = () => {
+    if (!customerHistory) return
+    const customer = customerHistory.customer
+    const transactions = customerHistory.transactions || []
+    const payments = customerHistory.payments || []
+
+    let csvContent = '\uFEFF' // UTF-8 BOM
+    csvContent += `REPORTE DE BILLETERA & CONSUMOS - ${customer.name}\n`
+    csvContent += `Telefono: +${customer.phone}\n`
+    csvContent += `Saldo Actual: $${customer.balance.toFixed(2)} USD\n`
+    csvContent += `Fecha Reporte: ${new Date().toLocaleString('es-EC')}\n\n`
+
+    csvContent += `--- MOVIMIENTOS DE SALDO ---\n`
+    csvContent += `Fecha,Tipo,Concepto,Monto (USD)\n`
+    transactions.forEach((tx: any) => {
+      const date = new Date(tx.createdAt).toLocaleDateString('es-EC')
+      const type = tx.type === 'CASHBACK_EARNED' ? 'Cashback Ganado' : 'Canje en Mostrador'
+      const desc = `"${(tx.description || '').replace(/"/g, '""')}"`
+      const sign = tx.type === 'CASHBACK_EARNED' ? '+' : '-'
+      csvContent += `${date},${type},${desc},${sign}${tx.amount.toFixed(2)}\n`
+    })
+
+    csvContent += `\n--- CONSUMOS REGISTRADOS ---\n`
+    csvContent += `Fecha,Tipo,Descripcion,Total Pagado (USD),Cashback Generado (USD)\n`
+    payments.forEach((p: any) => {
+      const date = new Date(p.createdAt).toLocaleDateString('es-EC')
+      const type = p.type === 'MEMBERSHIP' ? 'Mensualidad' : 'Tienda / Barra'
+      const desc = `"${(p.description || '').replace(/"/g, '""')}"`
+      csvContent += `${date},${type},${desc},${p.amount.toFixed(2)},${p.cashbackAmt.toFixed(2)}\n`
+    })
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', `Billetera_${customer.name.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
 
   const fetchWalletData = async () => {
     try {
@@ -394,12 +442,32 @@ export default function WalletAudit() {
                     {customerHistory?.customer?.phone ? `+${customerHistory.customer.phone}` : ''}
                   </p>
                 </div>
-                <button
-                  onClick={() => { setSelectedCustomerId(null); setHistoryPage(1); setTxTypeFilter('ALL'); setTxDateFrom(''); setTxDateTo('') }}
-                  className="p-2 rounded-xl bg-zinc-900 text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
-                >
-                  <X className="w-5 h-5" />
-                </button>
+                <div className="flex items-center gap-2">
+                  {customerHistory && (
+                    <button
+                      onClick={exportCustomerDataCSV}
+                      title="Descargar historial y consumos en CSV"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-900 border border-white/10 hover:border-white/20 text-xs font-bold text-zinc-300 hover:text-white transition-all cursor-pointer"
+                    >
+                      <Download className="w-3.5 h-3.5" style={{ color: 'var(--color-primary, #00F5D4)' }} />
+                      <span className="hidden sm:inline">Exportar</span>
+                    </button>
+                  )}
+                  <button
+                    onClick={() => {
+                      setSelectedCustomerId(null)
+                      setHistoryPage(1)
+                      setTxTypeFilter('ALL')
+                      setTxDateFrom('')
+                      setTxDateTo('')
+                      setShowAllTransactions(false)
+                      setShowAllPayments(false)
+                    }}
+                    className="p-2 rounded-xl bg-zinc-900 text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
               </div>
 
               {/* Tarjeta de Saldo y Fechas de Vigencia */}
@@ -639,7 +707,10 @@ export default function WalletAudit() {
                       </div>
                     ) : (
                       <div className="space-y-2">
-                        {customerHistory.transactions.map((tx: any) => {
+                        {(showAllTransactions
+                          ? customerHistory.transactions
+                          : customerHistory.transactions.slice(0, 5)
+                        ).map((tx: any) => {
                           const isEarned = tx.type === 'CASHBACK_EARNED'
                           return (
                             <div
@@ -682,6 +753,17 @@ export default function WalletAudit() {
                             </div>
                           )
                         })}
+
+                        {customerHistory.transactions.length > 5 && (
+                          <button
+                            onClick={() => setShowAllTransactions(!showAllTransactions)}
+                            className="w-full py-2 text-center text-xs font-bold transition-all rounded-lg border border-white/10 bg-zinc-900/50 hover:bg-zinc-900 text-zinc-300 hover:text-white"
+                          >
+                            {showAllTransactions
+                              ? '▲ Mostrar solo los últimos 5'
+                              : `▼ Ver más (${customerHistory.transactions.length - 5} movimientos restantes)`}
+                          </button>
+                        )}
                       </div>
                     )}
 
@@ -724,7 +806,10 @@ export default function WalletAudit() {
                       </div>
                     ) : (
                       <div className="space-y-2">
-                        {customerHistory.payments.map((p: any) => (
+                        {(showAllPayments
+                          ? customerHistory.payments
+                          : customerHistory.payments.slice(0, 5)
+                        ).map((p: any) => (
                           <div
                             key={p.id}
                             className="p-3 rounded-xl bg-zinc-950 border border-white/5 text-xs"
@@ -751,6 +836,17 @@ export default function WalletAudit() {
                             </span>
                           </div>
                         ))}
+
+                        {customerHistory.payments.length > 5 && (
+                          <button
+                            onClick={() => setShowAllPayments(!showAllPayments)}
+                            className="w-full py-2 text-center text-xs font-bold transition-all rounded-lg border border-white/10 bg-zinc-900/50 hover:bg-zinc-900 text-zinc-300 hover:text-white"
+                          >
+                            {showAllPayments
+                              ? '▲ Mostrar solo los últimos 5'
+                              : `▼ Ver más (${customerHistory.payments.length - 5} consumos restantes)`}
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
