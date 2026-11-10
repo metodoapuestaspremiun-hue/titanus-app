@@ -66,6 +66,7 @@ export async function GET(req: Request) {
         phone: customer.phone,
         balance: Number(wallet?.balance || 0),
         membershipActive: customer.membershipActive,
+        membershipExpiry: customer.membershipExpiry,
       },
       transactions: transactions.map((t) => ({
         id: t.id,

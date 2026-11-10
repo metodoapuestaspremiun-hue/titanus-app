@@ -22,6 +22,8 @@ export default async function ClubLayout({
   let tenantSlug = 'default'
   let branchId: string | undefined = undefined
   let branchName: string | undefined = undefined
+  let moduleFidelizacion = true
+  let moduleMensajeria = true
 
   if (gymSession) {
     try {
@@ -36,12 +38,16 @@ export default async function ClubLayout({
           primaryColor: true,
           secondaryColor: true,
           logoUrl: true,
+          moduleFidelizacion: true,
+          moduleMensajeria: true,
         },
       })
 
       if (tenant) {
         tenantName = tenant.name
         tenantSlug = tenant.slug
+        moduleFidelizacion = tenant.moduleFidelizacion
+        moduleMensajeria = tenant.moduleMensajeria
         // Si el cliente tiene logo propio, priorizar su logo y su color extraído/guardado
         if (tenant.logoUrl) {
           logoUrl = tenant.logoUrl
@@ -91,6 +97,8 @@ export default async function ClubLayout({
         primaryColor: true,
         secondaryColor: true,
         logoUrl: true,
+        moduleFidelizacion: true,
+        moduleMensajeria: true,
       },
     })
     if (titanus) {
@@ -99,6 +107,8 @@ export default async function ClubLayout({
       logoUrl = titanus.logoUrl || '/Logo.webp'
       primaryColor = titanus.primaryColor || '#ffe202'
       secondaryColor = titanus.secondaryColor || '#000000'
+      moduleFidelizacion = titanus.moduleFidelizacion
+      moduleMensajeria = titanus.moduleMensajeria
 
       // Resolve main branch for legacy session
       const mainBranch = await prisma.branch.findFirst({
@@ -121,6 +131,8 @@ export default async function ClubLayout({
       tenantSlug={tenantSlug}
       branchId={branchId}
       branchName={branchName}
+      moduleFidelizacion={moduleFidelizacion}
+      moduleMensajeria={moduleMensajeria}
     >
       <div className="min-h-screen bg-[var(--bg-app,#03080F)] text-white flex flex-col transition-colors duration-300">
         <TopHeaderSwitcher />

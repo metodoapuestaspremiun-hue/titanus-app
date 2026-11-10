@@ -38,12 +38,38 @@ export async function GET(req: Request) {
       ? allWallets.filter((w) => customerIds!.includes(w.customerId))
       : allWallets
 
-    const customers = filteredWallets.map((w) => ({
-      id: w.customer.id,
-      name: w.customer.name,
-      phone: w.customer.phone,
-      balance: Number(w.balance),
-    }))
+    const now = new Date()
+    const customers = filteredWallets.map((w) => {
+      const expiry = w.customer.membershipExpiry ? new Date(w.customer.membershipExpiry) : null
+      // Fecha límite de cashback: Vencimiento de membresía + 30 días de gracia
+      const cashbackDeadline = expiry ? new Date(expiry.getTime() + 30 * 24 * 60 * 60 * 1000) : null
+      
+      let cashbackStatus: 'ACTIVE' | 'GRACE_PERIOD' | 'EXPIRED' = 'ACTIVE'
+      let daysRemaining = null
+
+      if (cashbackDeadline) {
+        const diffMs = cashbackDeadline.getTime() - now.getTime()
+        daysRemaining = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
+        if (daysRemaining <= 0) {
+          cashbackStatus = 'EXPIRED'
+        } else if (expiry && now > expiry) {
+          cashbackStatus = 'GRACE_PERIOD' // En el mes de cuenta regresiva para volver
+        } else {
+          cashbackStatus = 'ACTIVE'
+        }
+      }
+
+      return {
+        id: w.customer.id,
+        name: w.customer.name,
+        phone: w.customer.phone,
+        balance: Number(w.balance),
+        membershipExpiry: expiry,
+        cashbackDeadline,
+        cashbackStatus,
+        daysRemaining,
+      }
+    })
 
     return NextResponse.json({
       totalBalance: Number(totalBalance.toFixed(2)),

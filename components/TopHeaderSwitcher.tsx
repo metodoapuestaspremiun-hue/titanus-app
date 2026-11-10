@@ -148,111 +148,53 @@ export default function TopHeaderSwitcher() {
               {isClub ? "Módulo Fidelización" : "Módulo Bot Difusión & Mensajería"}
             </span>
           </div>
-
-          {/* Branch Switcher — only shown in club area */}
-          {isClub && (activeBranchName || branches.length > 0) && (
-            <div className="relative ml-1 sm:ml-2 shrink-0" ref={branchDropdownRef}>
-              <button
-                onClick={() => hasMultipleBranches && setBranchDropdownOpen((o) => !o)}
-                disabled={switchingBranch}
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition-all
-                  ${hasMultipleBranches
-                    ? "border-white/15 bg-white/5 hover:bg-white/10 hover:border-white/25 cursor-pointer text-zinc-200"
-                    : "border-white/10 bg-white/5 cursor-default text-zinc-300"
-                  }
-                `}
-                aria-label="Cambiar sucursal"
-              >
-                {switchingBranch ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin text-zinc-400" />
-                ) : (
-                  <MapPin className="w-3.5 h-3.5 shrink-0" style={{ color: primaryColor }} />
-                )}
-                <span className="hidden xs:inline sm:inline max-w-[80px] truncate">
-                  {activeBranchName ?? "Sucursal"}
-                </span>
-                {hasMultipleBranches && (
-                  <ChevronDown
-                    className={`w-3 h-3 text-zinc-400 transition-transform shrink-0 ${branchDropdownOpen ? "rotate-180" : ""}`}
-                  />
-                )}
-              </button>
-
-              {/* Dropdown */}
-              {branchDropdownOpen && hasMultipleBranches && (
-                <div className="absolute top-full left-0 mt-1.5 w-52 bg-zinc-900 border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden">
-                  <div className="px-3 py-2 border-b border-white/5">
-                    <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
-                      Cambiar sucursal
-                    </p>
-                  </div>
-                  <ul className="py-1">
-                    {branches.map((branch) => {
-                      const isActive = branch.id === activeBranchId;
-                      return (
-                        <li key={branch.id}>
-                          <button
-                            onClick={() => handleBranchSwitch(branch.id)}
-                            className={`w-full flex items-center gap-2 px-3 py-2.5 text-left transition-colors text-xs
-                              ${isActive
-                                ? "text-white bg-white/8"
-                                : "text-zinc-300 hover:text-white hover:bg-white/5"
-                              }
-                            `}
-                          >
-                            <MapPin
-                              className="w-3.5 h-3.5 shrink-0"
-                              style={{ color: isActive ? primaryColor : undefined }}
-                            />
-                            <span className="flex-1 font-medium truncate">{branch.name}</span>
-                            {branch.isMain && (
-                              <span className="text-[9px] font-bold text-zinc-500 uppercase">
-                                Principal
-                              </span>
-                            )}
-                            {isActive && (
-                              <Check className="w-3.5 h-3.5 shrink-0" style={{ color: primaryColor }} />
-                            )}
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </div>
-              )}
-            </div>
-          )}
         </div>
 
-        {/* Switcher Táctico */}
-        <div className="flex items-center bg-black/40 p-1 rounded-xl border border-white/10 backdrop-blur-md shrink-0">
-          <Link
-            href="/club/dashboard"
-            className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs font-bold transition-all ${
-              isClub
-                ? "text-black shadow-md font-bold"
-                : "text-zinc-400 hover:text-white hover:bg-white/5"
-            }`}
-            style={isClub ? { backgroundColor: primaryColor } : {}}
-          >
-            <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-            <span className="hidden xs:inline sm:inline">Fidelización</span>
-          </Link>
+        {/* Switcher Táctico (Condicionado por los módulos activos) */}
+        {(theme.moduleFidelizacion && theme.moduleMensajeria) ? (
+          <div className="flex items-center bg-black/40 p-1 rounded-xl border border-white/10 backdrop-blur-md shrink-0">
+            <Link
+              href="/club/dashboard"
+              className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs font-bold transition-all ${
+                isClub
+                  ? "text-black shadow-md font-bold"
+                  : "text-zinc-400 hover:text-white hover:bg-white/5"
+              }`}
+              style={isClub ? { backgroundColor: primaryColor } : {}}
+            >
+              <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+              <span className="hidden xs:inline sm:inline">Fidelización</span>
+            </Link>
 
-          <Link
-            href="/bot-dashboard"
-            className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs font-bold transition-all ${
-              !isClub
-                ? "text-black shadow-md font-bold"
-                : "text-zinc-400 hover:text-white hover:bg-white/5"
-            }`}
-            style={!isClub ? { backgroundColor: primaryColor } : {}}
-          >
-            <MessageSquare className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-            <span className="hidden sm:inline">Bot & Mensajes</span>
-            <span className="sm:hidden text-[11px]">Bot</span>
-          </Link>
-        </div>
+            <Link
+              href="/bot-dashboard"
+              className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs font-bold transition-all ${
+                !isClub
+                  ? "text-black shadow-md font-bold"
+                  : "text-zinc-400 hover:text-white hover:bg-white/5"
+              }`}
+              style={!isClub ? { backgroundColor: primaryColor } : {}}
+            >
+              <MessageSquare className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+              <span className="hidden sm:inline">Bot & Mensajes</span>
+              <span className="sm:hidden text-[11px]">Bot</span>
+            </Link>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <span
+              className="text-xs font-bold px-3 py-1.5 rounded-lg border flex items-center gap-1.5"
+              style={{
+                backgroundColor: 'color-mix(in srgb, var(--color-primary, #00F5D4) 10%, transparent)',
+                borderColor: 'color-mix(in srgb, var(--color-primary, #00F5D4) 30%, transparent)',
+                color: primaryColor,
+              }}
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>{theme.moduleFidelizacion ? 'Módulo Fidelización' : 'Módulo Mensajería'}</span>
+            </span>
+          </div>
+        )}
       </header>
 
       {/* Drawer móvil deslizable */}

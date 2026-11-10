@@ -93,6 +93,26 @@ export async function POST(req: Request) {
         },
       })
 
+      // 1.1 Si es MENSUALIDAD, calcular vigencia de membresía y vigencia del cashback (duración membresía + 30 días de gracia)
+      let planDurationDays = 30
+      if (payment.type === 'MEMBERSHIP') {
+        const matchedPlan = await tx.membershipPlan.findFirst({
+          where: { tenantId: payment.tenantId, name: payment.description || '' },
+        })
+        if (matchedPlan?.durationDays) {
+          planDurationDays = matchedPlan.durationDays
+        }
+        const now = new Date()
+        const membershipExpiry = new Date(now.getTime() + planDurationDays * 24 * 60 * 60 * 1000)
+        await tx.customer.update({
+          where: { id: payment.customerId },
+          data: {
+            membershipActive: true,
+            membershipExpiry,
+          },
+        })
+      }
+
       // 2. Obtener o crear Wallet del socio que paga
       let wallet = await tx.wallet.findUnique({
         where: { customerId: payment.customerId },

@@ -11,6 +11,8 @@ interface ThemeContextType {
   isCustomBranded: boolean
   branchId?: string
   branchName?: string
+  moduleFidelizacion?: boolean
+  moduleMensajeria?: boolean
 }
 
 const ThemeContext = createContext<ThemeContextType>({
@@ -22,6 +24,8 @@ const ThemeContext = createContext<ThemeContextType>({
   isCustomBranded: false,
   branchId: undefined,
   branchName: undefined,
+  moduleFidelizacion: true,
+  moduleMensajeria: true,
 })
 
 export const useTheme = () => useContext(ThemeContext)
@@ -35,6 +39,8 @@ export function ThemeProvider({
   tenantSlug = 'default',
   branchId,
   branchName,
+  moduleFidelizacion = true,
+  moduleMensajeria = true,
 }: {
   children: React.ReactNode
   primaryColor?: string
@@ -44,6 +50,8 @@ export function ThemeProvider({
   tenantSlug?: string
   branchId?: string
   branchName?: string
+  moduleFidelizacion?: boolean
+  moduleMensajeria?: boolean
 }) {
   // isCustomBranded: true si tiene logo externo (URL http o no es el logo ALL-CRM por defecto)
   const isCustomBranded = Boolean(logoUrl && !logoUrl.startsWith('/branding/'))
@@ -77,6 +85,8 @@ export function ThemeProvider({
         isCustomBranded,
         branchId,
         branchName,
+        moduleFidelizacion,
+        moduleMensajeria,
       }}
     >
       <style

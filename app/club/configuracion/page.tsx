@@ -54,12 +54,12 @@ export default function ClubConfig() {
   const [loadingPlans, setLoadingPlans] = useState(false)
   const [newPlanName, setNewPlanName] = useState('')
   const [newPlanPrice, setNewPlanPrice] = useState('')
-  const [newPlanDays, setNewPlanDays] = useState('30')
+  const [newPlanMonths, setNewPlanMonths] = useState('1')
   const [addingPlan, setAddingPlan] = useState(false)
   const [editingPlanId, setEditingPlanId] = useState<string | null>(null)
   const [editPlanName, setEditPlanName] = useState('')
   const [editPlanPrice, setEditPlanPrice] = useState('')
-  const [editPlanDays, setEditPlanDays] = useState('30')
+  const [editPlanMonths, setEditPlanMonths] = useState('1')
   const [updatingPlan, setUpdatingPlan] = useState(false)
 
   // Dominio base de la app para los QR impresos
@@ -120,14 +120,15 @@ export default function ClubConfig() {
     if (!newPlanName.trim() || !newPlanPrice) return
     try {
       setAddingPlan(true)
+      const months = Math.max(1, parseInt(newPlanMonths) || 1)
       await axios.post('/api/club/plans', {
         name: newPlanName.trim(),
         price: parseFloat(newPlanPrice),
-        durationDays: parseInt(newPlanDays) || 30,
+        durationDays: months * 30,
       })
       setNewPlanName('')
       setNewPlanPrice('')
-      setNewPlanDays('30')
+      setNewPlanMonths('1')
       loadPlans()
     } catch (e: any) {
       alert('Error agregando plan: ' + (e.response?.data?.error || e.message))
@@ -150,14 +151,15 @@ export default function ClubConfig() {
     setEditingPlanId(plan.id)
     setEditPlanName(plan.name)
     setEditPlanPrice(String(plan.price))
-    setEditPlanDays(String(plan.durationDays || 30))
+    const calcMonths = Math.max(1, Math.round((plan.durationDays || 30) / 30))
+    setEditPlanMonths(String(calcMonths))
   }
 
   const cancelEditPlan = () => {
     setEditingPlanId(null)
     setEditPlanName('')
     setEditPlanPrice('')
-    setEditPlanDays('30')
+    setEditPlanMonths('1')
   }
 
   const handleUpdatePlan = async (id: string) => {
@@ -167,11 +169,12 @@ export default function ClubConfig() {
     }
     try {
       setUpdatingPlan(true)
+      const months = Math.max(1, parseInt(editPlanMonths) || 1)
       await axios.put('/api/club/plans', {
         id,
         name: editPlanName.trim(),
         price: parseFloat(editPlanPrice),
-        durationDays: parseInt(editPlanDays) || 30,
+        durationDays: months * 30,
       })
       cancelEditPlan()
       loadPlans()
@@ -474,14 +477,17 @@ export default function ClubConfig() {
                   />
                 </div>
                 <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    min="1"
-                    placeholder="Días (ej: 30)"
-                    value={newPlanDays}
-                    onChange={(e) => setNewPlanDays(e.target.value)}
-                    className="w-full px-3 py-2 bg-black border border-white/10 rounded-xl text-xs text-white focus:outline-none placeholder-zinc-500"
-                  />
+                  <select
+                    value={newPlanMonths}
+                    onChange={(e) => setNewPlanMonths(e.target.value)}
+                    className="w-full px-3 py-2 bg-black border border-white/10 rounded-xl text-xs text-white focus:outline-none"
+                  >
+                    <option value="1">1 Mes (30 días)</option>
+                    <option value="2">2 Meses (60 días)</option>
+                    <option value="3">3 Meses (Trimestre)</option>
+                    <option value="6">6 Meses (Semestre)</option>
+                    <option value="12">12 Meses (Anual)</option>
+                  </select>
                   <button
                     type="submit"
                     disabled={addingPlan}
@@ -505,6 +511,7 @@ export default function ClubConfig() {
                 plans.map((p) => {
                   const isEditing = editingPlanId === p.id
                   const cashbackAmt = ((Number(p.price) * membershipCashback) / 100).toFixed(2)
+                  const planMonths = Math.max(1, Math.round((p.durationDays || 30) / 30))
 
                   return (
                     <div key={p.id} className="py-2.5">
@@ -535,12 +542,17 @@ export default function ClubConfig() {
                               className="px-3 py-1.5 bg-black border border-white/10 rounded-lg text-xs text-white focus:outline-none"
                             />
                             <div className="flex items-center gap-2">
-                              <input
-                                type="number"
-                                value={editPlanDays}
-                                onChange={(e) => setEditPlanDays(e.target.value)}
+                              <select
+                                value={editPlanMonths}
+                                onChange={(e) => setEditPlanMonths(e.target.value)}
                                 className="w-full px-3 py-1.5 bg-black border border-white/10 rounded-lg text-xs text-white focus:outline-none"
-                              />
+                              >
+                                <option value="1">1 Mes (30 días)</option>
+                                <option value="2">2 Meses (60 días)</option>
+                                <option value="3">3 Meses (Trimestre)</option>
+                                <option value="6">6 Meses (Semestre)</option>
+                                <option value="12">12 Meses (Anual)</option>
+                              </select>
                               <button
                                 onClick={() => handleUpdatePlan(p.id)}
                                 disabled={updatingPlan}
@@ -569,7 +581,9 @@ export default function ClubConfig() {
                               <div className="flex items-center gap-2 text-xs text-zinc-400">
                                 <span>${Number(p.price).toFixed(2)} USD</span>
                                 <span>&bull;</span>
-                                <span>{p.durationDays} días</span>
+                                <span className="font-semibold text-zinc-300">
+                                  {planMonths === 1 ? '1 Mes' : `${planMonths} Meses`} ({p.durationDays} días)
+                                </span>
                                 <span>&bull;</span>
                                 <span style={{ color: 'var(--color-primary, #00F5D4)' }} className="font-bold">
                                   +${cashbackAmt} cashback ({membershipCashback}%)

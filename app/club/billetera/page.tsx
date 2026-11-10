@@ -14,7 +14,10 @@ import {
   ChevronRight,
   X,
   Clock,
-  ListFilter
+  ListFilter,
+  CheckCircle,
+  AlertTriangle,
+  Gift
 } from 'lucide-react'
 import axios from 'axios'
 import { action_membership_jpg, action_bar_jpg, action_coach_jpg } from '@/lib/brandingImages'
@@ -40,6 +43,12 @@ export default function WalletAudit() {
   const [txTypeFilter, setTxTypeFilter] = useState('ALL')
   const [txDateFrom, setTxDateFrom] = useState('')
   const [txDateTo, setTxDateTo] = useState('')
+
+  // Estado para Canje de Cashback en mostrador
+  const [redeemAmount, setRedeemAmount] = useState('')
+  const [redeemDesc, setRedeemDesc] = useState('')
+  const [redeemLoading, setRedeemLoading] = useState(false)
+  const [redeemMsg, setRedeemMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null)
 
   const fetchWalletData = async () => {
     try {
@@ -86,6 +95,33 @@ export default function WalletAudit() {
       console.error('Error cargando historial de cliente:', e)
     } finally {
       setLoadingHistory(false)
+    }
+  }
+
+  // Ejecutar canje de saldo en recepción
+  const handleRedeemBalance = async () => {
+    if (!selectedCustomerId || !redeemAmount || Number(redeemAmount) <= 0) return
+    try {
+      setRedeemLoading(true)
+      setRedeemMsg(null)
+      const res = await axios.post('/api/club/wallet', {
+        customerId: selectedCustomerId,
+        amountToRedeem: Number(redeemAmount),
+        description: redeemDesc.trim() || 'Canje de cashback en recepción',
+      })
+      setRedeemMsg({ text: '¡Saldo canjeado exitosamente!', type: 'success' })
+      setRedeemAmount('')
+      setRedeemDesc('')
+      // Refrescar datos
+      await fetchWalletData()
+      await openCustomerHistory(selectedCustomerId, 1, txTypeFilter, txDateFrom, txDateTo)
+    } catch (err: any) {
+      setRedeemMsg({
+        text: err?.response?.data?.error || 'Error al canjear saldo',
+        type: 'error',
+      })
+    } finally {
+      setRedeemLoading(false)
     }
   }
 
@@ -281,7 +317,24 @@ export default function WalletAudit() {
                       <span className="font-bold text-white text-sm block group-hover:text-[var(--color-primary,#00F5D4)] transition-colors">
                         {c.name}
                       </span>
-                      <span className="text-xs text-zinc-400 font-mono">+{c.phone}</span>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-xs text-zinc-400 font-mono">+{c.phone}</span>
+                        {c.cashbackStatus === 'GRACE_PERIOD' && (
+                          <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-400 animate-pulse">
+                            ⚠️ Expira en {c.daysRemaining} días
+                          </span>
+                        )}
+                        {c.cashbackStatus === 'EXPIRED' && (
+                          <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-red-500/15 border border-red-500/30 text-red-400">
+                            Expirado
+                          </span>
+                        )}
+                        {c.cashbackStatus === 'ACTIVE' && c.daysRemaining !== null && (
+                          <span className="text-[10px] font-semibold text-zinc-500">
+                            (Membresía activa)
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
 
@@ -349,29 +402,83 @@ export default function WalletAudit() {
                 </button>
               </div>
 
-              {/* Tarjeta de Saldo */}
-              {customerHistory && (
-                <div
-                  className="mt-4 p-4 rounded-2xl bg-[var(--bg-card,#05101C)] border flex items-center justify-between"
-                  style={{ borderColor: 'color-mix(in srgb, var(--color-primary, #00F5D4) 40%, transparent)' }}
-                >
-                  <div>
-                    <span className="text-xs text-zinc-400 font-medium block">Saldo Disponible</span>
-                    <span className="text-2xl font-black" style={{ color: 'var(--color-primary, #00F5D4)' }}>
-                      ${customerHistory.customer.balance.toFixed(2)} USD
-                    </span>
+              {/* Tarjeta de Saldo y Fechas de Vigencia */}
+              {customerHistory && (() => {
+                const customerData = data.customers.find((c: any) => c.id === customerHistory.customer.id)
+                const membershipExpiry = customerHistory.customer.membershipExpiry || customerData?.membershipExpiry
+                const cashbackDeadline = customerData?.cashbackDeadline
+                const cashbackStatus = customerData?.cashbackStatus
+                const daysRemaining = customerData?.daysRemaining
+
+                return (
+                  <div className="mt-4 space-y-3">
+                    <div
+                      className="p-4 rounded-2xl bg-[var(--bg-card,#05101C)] border flex items-center justify-between"
+                      style={{ borderColor: 'color-mix(in srgb, var(--color-primary, #00F5D4) 40%, transparent)' }}
+                    >
+                      <div>
+                        <span className="text-xs text-zinc-400 font-medium block">Saldo Disponible</span>
+                        <span className="text-2xl font-black" style={{ color: 'var(--color-primary, #00F5D4)' }}>
+                          ${customerHistory.customer.balance.toFixed(2)} USD
+                        </span>
+                      </div>
+                      <div
+                        className="w-10 h-10 rounded-xl flex items-center justify-center border"
+                        style={{
+                          backgroundColor: 'color-mix(in srgb, var(--color-primary, #00F5D4) 15%, transparent)',
+                          borderColor: 'color-mix(in srgb, var(--color-primary, #00F5D4) 30%, transparent)'
+                        }}
+                      >
+                        <Sparkles className="w-5 h-5" style={{ color: 'var(--color-primary, #00F5D4)' }} />
+                      </div>
+                    </div>
+
+                    {/* Vigencias de Mensualidad y Cashback */}
+                    <div className="p-3.5 rounded-xl bg-zinc-950/80 border border-white/10 text-xs space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-zinc-400 flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5 text-zinc-500" />
+                          Fin de Mensualidad:
+                        </span>
+                        <span className="font-bold text-white">
+                          {membershipExpiry
+                            ? new Date(membershipExpiry).toLocaleDateString('es-EC', { day: '2-digit', month: 'short', year: 'numeric' })
+                            : 'Sin membresía registrada'}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-1 border-t border-white/5">
+                        <span className="text-zinc-400 flex items-center gap-1.5">
+                          <Gift className="w-3.5 h-3.5" style={{ color: 'var(--color-primary, #00F5D4)' }} />
+                          Vencimiento Cashback:
+                        </span>
+                        <div className="text-right">
+                          <span className="font-bold text-white block">
+                            {cashbackDeadline
+                              ? new Date(cashbackDeadline).toLocaleDateString('es-EC', { day: '2-digit', month: 'short', year: 'numeric' })
+                              : 'Vigente'}
+                          </span>
+                          {cashbackStatus === 'GRACE_PERIOD' && (
+                            <span className="text-[10px] font-black text-amber-400 animate-pulse block">
+                              ⚠️ Expira en {daysRemaining} días (Mes de gracia)
+                            </span>
+                          )}
+                          {cashbackStatus === 'EXPIRED' && (
+                            <span className="text-[10px] font-black text-red-400 block">
+                              ⛔ Saldo vencido
+                            </span>
+                          )}
+                          {cashbackStatus === 'ACTIVE' && (
+                            <span className="text-[10px] text-emerald-400 block">
+                              ✓ Vigente durante membresía
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  <div
-                    className="w-10 h-10 rounded-xl flex items-center justify-center border"
-                    style={{
-                      backgroundColor: 'color-mix(in srgb, var(--color-primary, #00F5D4) 15%, transparent)',
-                      borderColor: 'color-mix(in srgb, var(--color-primary, #00F5D4) 30%, transparent)'
-                    }}
-                  >
-                    <Sparkles className="w-5 h-5" style={{ color: 'var(--color-primary, #00F5D4)' }} />
-                  </div>
-                </div>
-              )}
+                )
+              })()}
             </div>
 
             {/* Contenido scrollable */}
@@ -383,6 +490,86 @@ export default function WalletAudit() {
                 </div>
               ) : customerHistory ? (
                 <>
+                  {/* Bloque Táctico: Canjear Saldo en Recepción */}
+                  <div className="p-4 rounded-2xl bg-[var(--bg-card,#05101C)] border border-white/10 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                        <ArrowUpRight className="w-4 h-4 text-amber-400" />
+                        Canjear Saldo (Recepción / Mostrador)
+                      </span>
+                      <span className="text-[11px] text-zinc-400">
+                        Disponible: <strong className="text-white">${customerHistory.customer.balance.toFixed(2)}</strong>
+                      </span>
+                    </div>
+
+                    {customerHistory.customer.balance <= 0 ? (
+                      <p className="text-xs text-zinc-500">Este socio no tiene saldo disponible para canjear.</p>
+                    ) : (
+                      <div className="space-y-2.5">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[10px] text-zinc-400 block mb-1">Monto a Canjear ($ USD)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0.01"
+                              max={customerHistory.customer.balance}
+                              placeholder="0.00"
+                              value={redeemAmount}
+                              onChange={(e) => setRedeemAmount(e.target.value)}
+                              className="w-full px-3 py-2 bg-zinc-900 border border-white/10 rounded-xl text-xs text-white focus:outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-zinc-400 block mb-1">Motivo / Concepto</label>
+                            <input
+                              type="text"
+                              placeholder="Ej: Descuento mensualidad o agua"
+                              value={redeemDesc}
+                              onChange={(e) => setRedeemDesc(e.target.value)}
+                              className="w-full px-3 py-2 bg-zinc-900 border border-white/10 rounded-xl text-xs text-white focus:outline-none"
+                            />
+                          </div>
+                        </div>
+
+                        {redeemMsg && (
+                          <div
+                            className={`p-2.5 rounded-xl text-xs flex items-center gap-2 ${
+                              redeemMsg.type === 'success'
+                                ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
+                                : 'bg-red-500/10 border border-red-500/20 text-red-400'
+                            }`}
+                          >
+                            {redeemMsg.type === 'success' ? (
+                              <CheckCircle className="w-4 h-4 shrink-0" />
+                            ) : (
+                              <AlertTriangle className="w-4 h-4 shrink-0" />
+                            )}
+                            <span>{redeemMsg.text}</span>
+                          </div>
+                        )}
+
+                        <button
+                          disabled={
+                            redeemLoading ||
+                            !redeemAmount ||
+                            Number(redeemAmount) <= 0 ||
+                            Number(redeemAmount) > customerHistory.customer.balance
+                          }
+                          onClick={handleRedeemBalance}
+                          className="w-full py-2.5 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed bg-amber-500 hover:bg-amber-400 text-black shadow-lg"
+                        >
+                          {redeemLoading ? (
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <ArrowUpRight className="w-4 h-4" />
+                          )}
+                          Aplicar Canje Inmediato
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
                   {/* Filtros de Movimientos */}
                   <div>
                     <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">

@@ -26,6 +26,17 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Saldo insuficiente en monedero' }, { status: 400 })
     }
 
+    // Validación de expiración de cashback (Vencimiento de membresía + 30 días de gracia)
+    if (customer.membershipExpiry) {
+      const expiry = new Date(customer.membershipExpiry)
+      const cashbackDeadline = new Date(expiry.getTime() + 30 * 24 * 60 * 60 * 1000)
+      if (new Date() > cashbackDeadline) {
+        return NextResponse.json({
+          error: 'El saldo de cashback de este socio ha expirado porque superó los 30 días de gracia sin renovar membresía.',
+        }, { status: 400 })
+      }
+    }
+
     const newBalance = Number(wallet.balance) - Number(amountToRedeem)
 
     await prisma.$transaction([
